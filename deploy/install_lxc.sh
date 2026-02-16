@@ -36,13 +36,17 @@ python3 -m venv "${APP_DIR}/.venv"
 "${APP_DIR}/.venv/bin/pip" install --upgrade pip
 "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
 
-echo "[6/10] Installing config and service unit..."
+echo "[6/11] Installing CLI command symlinks..."
+ln -sf "${APP_DIR}/.venv/bin/ai-agents-hub" /usr/local/bin/ai-agents-hub
+ln -sf /usr/local/bin/ai-agents-hub /usr/local/bin/aiagentshub
+
+echo "[7/11] Installing config and service unit..."
 if [[ ! -f "${CONFIG_DIR}/config.yaml" ]]; then
   cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
 fi
 cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
 
-echo "[7/10] Installing environment file..."
+echo "[8/11] Installing environment file..."
 if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
   cat > "${CONFIG_DIR}/ai-agents-hub.env" <<'EOF'
 OPENAI_API_KEY=
@@ -52,16 +56,16 @@ EOF
 fi
 chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
 
-echo "[8/10] Installing prompt files..."
+echo "[9/11] Installing prompt files..."
 for prompt_file in "${APP_DIR}/prompts/specialists/"*.md; do
   prompt_name="$(basename "${prompt_file}")"
   [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
 done
 
-echo "[9/10] Applying ownership..."
+echo "[10/11] Applying ownership..."
 chown -R aihub:aihub "${APP_DIR}" "${DATA_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
 
-echo "[10/10] Enabling service..."
+echo "[11/11] Enabling service..."
 systemctl daemon-reload
 systemctl enable --now "${SERVICE_NAME}"
 systemctl --no-pager status "${SERVICE_NAME}" || true

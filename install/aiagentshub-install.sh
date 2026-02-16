@@ -52,6 +52,11 @@ $STD "${APP_DIR}/.venv/bin/pip" install --upgrade pip
 $STD "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
 msg_ok "Python environment ready"
 
+msg_info "Installing CLI command symlinks"
+$STD ln -sf "${APP_DIR}/.venv/bin/ai-agents-hub" /usr/local/bin/ai-agents-hub
+$STD ln -sf /usr/local/bin/ai-agents-hub /usr/local/bin/aiagentshub
+msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
+
 msg_info "Installing configuration"
 if [[ ! -f "${CONFIG_DIR}/config.yaml" ]]; then
   $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"

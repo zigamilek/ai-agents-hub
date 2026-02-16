@@ -104,6 +104,11 @@ function update_script() {
   $STD "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
   msg_ok "Python environment ready"
 
+  msg_info "Installing CLI command symlinks"
+  $STD ln -sf "${APP_DIR}/.venv/bin/ai-agents-hub" /usr/local/bin/ai-agents-hub
+  $STD ln -sf /usr/local/bin/ai-agents-hub /usr/local/bin/aiagentshub
+  msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
+
   msg_info "Refreshing runtime files"
   $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" "${DATA_DIR}/memories" "${DATA_DIR}/obsidian" /var/log/ai-agents-hub
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
