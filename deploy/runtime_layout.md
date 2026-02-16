@@ -12,8 +12,8 @@ AI Agents Hub uses persistent paths so the service survives restarts.
 
 ## Memory Files
 
-- Atomic domain memories:
-  - `/var/lib/ai-agents-hub/memories/domains/<domain>/<year>/<date>-<memory_id>-<slug>.md`
+- Curated domain memories (one file per domain/topic):
+  - `/var/lib/ai-agents-hub/memories/domains/<domain>.md`
 - Event log:
   - `/var/lib/ai-agents-hub/memories/_events/<date>.jsonl`
 - Derived index:

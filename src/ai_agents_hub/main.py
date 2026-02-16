@@ -10,6 +10,7 @@ from ai_agents_hub.config import AppConfig, load_config
 from ai_agents_hub.diagnostics import diagnostics_payload, health_payload, readiness_payload
 from ai_agents_hub.journal.obsidian_writer import ObsidianJournalWriter
 from ai_agents_hub.logging_setup import configure_logging, get_logger
+from ai_agents_hub.memory.curator import MemoryCurator
 from ai_agents_hub.memory.store import MemoryStore
 from ai_agents_hub.orchestration.supervisor import Supervisor
 from ai_agents_hub.prompts.manager import PromptManager
@@ -30,6 +31,11 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
     _ensure_runtime_dirs(config)
     memory_store = MemoryStore(config.memory.root_path)
     llm_router = LiteLLMRouter(config)
+    memory_curator = MemoryCurator(
+        config=config,
+        llm_router=llm_router,
+        memory_store=memory_store,
+    )
     tool_runner = ToolRunner(config)
     prompt_manager = PromptManager(config)
     journal_writer = (
@@ -45,6 +51,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
         config=config,
         llm_router=llm_router,
         memory_store=memory_store,
+        memory_curator=memory_curator,
         tool_runner=tool_runner,
         prompt_manager=prompt_manager,
         journal_writer=journal_writer,
@@ -52,6 +59,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
     return {
         "config": config,
         "memory_store": memory_store,
+        "memory_curator": memory_curator,
         "llm_router": llm_router,
         "tool_runner": tool_runner,
         "prompt_manager": prompt_manager,

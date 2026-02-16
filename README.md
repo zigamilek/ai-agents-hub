@@ -10,7 +10,7 @@ AI Agents Hub is a custom router/supervisor service that exposes an OpenAI-compa
 - Specialist routing with coherent final response synthesis
 - Web search augmentation with source-aware output
 - Image payload passthrough through `chat/completions`
-- Atomic markdown memory store (one memory per file with frontmatter)
+- AI-curated domain memory store (one markdown file per domain/topic)
 - Obsidian daily journal writing (journals are not part of memory store)
 - Restart-safe persistence and diagnostics endpoints
 
@@ -191,8 +191,23 @@ Then it prints:
 
 ## Memory Editing Strategy
 
-Canonical storage is atomic files under:
+Canonical memory storage is one markdown file per domain under:
 
-- `memories/domains/<domain>/<year>/...`
+- `memories/domains/<domain>.md`
 
-Practical manual editing should happen in Obsidian control notes and/or Dataview dashboards, while the atomic files remain source-of-truth.
+The memory curator model decides whether a new durable memory should be added, and avoids
+duplicates when a similar memory already exists.
+
+Default memory curator config:
+
+```yaml
+memory:
+  curator:
+    enabled: true
+    model: gemini-2.5-flash
+    min_confidence: 0.55
+    max_existing_chars: 8000
+    max_summary_chars: 160
+```
+
+You can manually edit each domain file directly in Obsidian or any editor.

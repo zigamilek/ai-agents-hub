@@ -12,6 +12,7 @@ from ai_agents_hub.api.schemas import ChatCompletionRequest, OpenAIMessage, late
 from ai_agents_hub.config import AppConfig
 from ai_agents_hub.journal.obsidian_writer import ObsidianJournalWriter
 from ai_agents_hub.logging_setup import get_logger
+from ai_agents_hub.memory.curator import MemoryCurator
 from ai_agents_hub.memory.store import MemoryRecord, MemoryStore
 from ai_agents_hub.orchestration.specialists import (
     SpecialistProfile,
@@ -74,6 +75,7 @@ class Supervisor:
         config: AppConfig,
         llm_router: LiteLLMRouter,
         memory_store: MemoryStore,
+        memory_curator: MemoryCurator,
         tool_runner: ToolRunner,
         prompt_manager: PromptManager,
         journal_writer: ObsidianJournalWriter | None,
@@ -81,6 +83,7 @@ class Supervisor:
         self.config = config
         self.llm_router = llm_router
         self.memory_store = memory_store
+        self.memory_curator = memory_curator
         self.tool_runner = tool_runner
         self.prompt_manager = prompt_manager
         self.journal_writer = journal_writer
@@ -208,7 +211,7 @@ class Supervisor:
         return "\n".join(lines)
 
     def _notification_block(self, record: MemoryRecord | None) -> str:
-        if not record or not self.config.memory.notify_on_write:
+        if not record or not record.created or not self.config.memory.notify_on_write:
             return ""
         return (
             "\n\nMemory written:\n"
@@ -247,7 +250,7 @@ class Supervisor:
         messages.extend(_message_to_dict(msg) for msg in request.messages)
         return messages
 
-    def _persist_side_effects(
+    async def _persist_side_effects(
         self,
         *,
         user_text: str,
@@ -257,22 +260,13 @@ class Supervisor:
         record: MemoryRecord | None = None
         journal_path: str | None = None
         if assistant_text.strip() and self.config.memory.auto_write:
-            summary = user_text.strip().split("\n")[0][:120] or "Conversation memory"
-            body = (
-                "### User\n"
-                f"{user_text.strip()}\n\n"
-                "### Assistant\n"
-                f"{assistant_text.strip()}\n"
-            )
-            record = self.memory_store.write_memory(
+            record = await self.memory_curator.maybe_capture(
                 domain=decision.domain if decision.domain != "general" else "general",
-                summary=summary,
-                body=body,
-                confidence=max(decision.confidence, 0.5),
-                tags=[decision.domain],
-                created_by_agent="supervisor",
+                user_text=user_text,
+                assistant_text=assistant_text,
             )
-            self.logger.debug("Memory side effect persisted id=%s", record.memory_id)
+            if record:
+                self.logger.debug("Memory side effect persisted id=%s", record.memory_id)
 
         if self.journal_writer and self.config.journal.enabled and assistant_text.strip():
             journal_file = self.journal_writer.append_entry(
@@ -326,7 +320,7 @@ class Supervisor:
         response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
 
-        record, journal_path = self._persist_side_effects(
+        record, journal_path = await self._persist_side_effects(
             user_text=user_text,
             assistant_text=assistant_text,
             decision=decision,
@@ -397,7 +391,7 @@ class Supervisor:
             yield f"data: {json.dumps(as_dict)}\n\n".encode("utf-8")
 
         assistant_text = "".join(collected).strip()
-        record, journal_path = self._persist_side_effects(
+        record, journal_path = await self._persist_side_effects(
             user_text=user_text,
             assistant_text=assistant_text,
             decision=decision,

@@ -45,6 +45,11 @@ def diagnostics_payload(
         "memory": memory_store.index.stats(),
         "config": {
             "memory_root": str(config.memory.root_path),
+            "memory_curator": {
+                "enabled": config.memory.curator.enabled,
+                "model": config.memory.curator.model,
+                "min_confidence": config.memory.curator.min_confidence,
+            },
             "journal_vault": str(config.journal.obsidian_vault_path),
             "web_search_enabled": config.tools.web_search,
             "prompts": prompt_config,

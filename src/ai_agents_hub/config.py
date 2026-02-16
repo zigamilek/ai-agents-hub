@@ -55,11 +55,20 @@ class ModelsConfig(BaseModel):
     fallbacks: list[str] = Field(default_factory=list)
 
 
+class MemoryCuratorConfig(BaseModel):
+    enabled: bool = True
+    model: str = "gemini-2.5-flash"
+    min_confidence: float = 0.55
+    max_existing_chars: int = 8000
+    max_summary_chars: int = 160
+
+
 class MemoryConfig(BaseModel):
     root_path: Path = Path("/var/lib/ai-agents-hub/memories")
     auto_write: bool = True
     notify_on_write: bool = True
     allow_undo: bool = True
+    curator: MemoryCuratorConfig = Field(default_factory=MemoryCuratorConfig)
 
 
 class JournalConfig(BaseModel):
