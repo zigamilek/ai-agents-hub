@@ -13,8 +13,7 @@ REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
 REPO_REF="${REPO_REF:-master}"
 
 if [[ "${VERBOSE:-no}" == "yes" ]]; then
-  set -x
-  msg_info "Verbose mode enabled: full installer output active."
+  msg_info "Verbose mode enabled: full installer output active (xtrace disabled)."
 fi
 
 msg_info "Updating package index"

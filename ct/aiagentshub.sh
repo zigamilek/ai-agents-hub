@@ -51,8 +51,7 @@ function update_script() {
   check_container_resources
 
   if [[ "${VERBOSE:-no}" == "yes" ]]; then
-    set -x
-    msg_info "Verbose mode enabled: showing full command output."
+    msg_info "Verbose mode enabled: showing command output (xtrace disabled)."
   fi
 
   local APP_DIR="/opt/ai-agents-hub"
