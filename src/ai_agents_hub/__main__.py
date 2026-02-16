@@ -27,12 +27,17 @@ def main() -> None:
     command = args.command or "serve"
 
     if command == "onboard":
-        run_onboarding(config_path=args.config_path, env_file=args.env_file)
+        run_onboarding(
+            config_path=getattr(args, "config_path", None),
+            env_file=getattr(args, "env_file", None),
+        )
         return
 
+    # When no subcommand is passed, argparse does not populate serve-only fields
+    # like host/port. Fall back to config values in that case.
     config = load_config(getattr(args, "config_path", None))
-    host = args.host or config.server.host
-    port = args.port or config.server.port
+    host = getattr(args, "host", None) or config.server.host
+    port = getattr(args, "port", None) or config.server.port
     uvicorn.run(
         "ai_agents_hub.main:app",
         host=host,
