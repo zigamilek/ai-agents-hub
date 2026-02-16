@@ -103,15 +103,6 @@ When executed inside LXC, this runs the script update flow and refreshes:
 - systemd service unit
 - service restart
 
-### Manual (inside container)
-
-From repo root inside the LXC container:
-
-```bash
-chmod +x deploy/install_lxc.sh
-sudo ./deploy/install_lxc.sh
-```
-
 Then edit:
 
 - `/etc/ai-agents-hub/config.yaml`
