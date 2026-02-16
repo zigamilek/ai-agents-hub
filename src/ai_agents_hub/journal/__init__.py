@@ -1,0 +1,1 @@
+# Obsidian journal integration.

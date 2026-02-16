@@ -1,0 +1,19 @@
+[Unit]
+Description=AI Agents Hub
+After=network.target
+
+[Service]
+Type=simple
+User=aihub
+Group=aihub
+WorkingDirectory=/opt/ai-agents-hub
+EnvironmentFile=-/etc/ai-agents-hub/ai-agents-hub.env
+Environment=AI_AGENTS_HUB_CONFIG=/etc/ai-agents-hub/config.yaml
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/ai-agents-hub/.venv/bin/ai-agents-hub
+Restart=always
+RestartSec=3
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

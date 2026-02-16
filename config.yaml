@@ -1,0 +1,81 @@
+server:
+  host: 0.0.0.0
+  port: 8080
+  api_keys:
+    - ${ENV:AI_AGENTS_HUB_API_KEY}
+
+providers:
+  openai:
+    api_key: ${ENV:OPENAI_API_KEY}
+  gemini:
+    api_key: ${ENV:GEMINI_API_KEY}
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+
+models:
+  default_chat: gpt-4o-mini
+  routing:
+    general: gpt-4o-mini
+    health: gpt-4o-mini
+    parenting: gpt-4o-mini
+    relationship: gpt-4o-mini
+    homelab: gemini-2.5-flash
+    personal_development: gpt-4o-mini
+  fallbacks:
+    - gemini-2.5-flash
+
+specialists:
+  prompts:
+    directory: /opt/ai-agents-hub/prompts/specialists
+    auto_reload: true
+    files:
+      supervisor: supervisor.md
+      general: general.md
+      health: health.md
+      parenting: parenting.md
+      relationship: relationship.md
+      homelab: homelab.md
+      personal_development: personal_development.md
+
+memory:
+  root_path: /var/lib/ai-agents-hub/memories
+  auto_write: true
+  notify_on_write: true
+  allow_undo: true
+
+journal:
+  enabled: true
+  obsidian_vault_path: /var/lib/ai-agents-hub/obsidian
+  daily_notes_dir: Daily
+  write_mode: append
+
+tools:
+  web_search: true
+  obsidian:
+    enabled: true
+    vault_path: /var/lib/ai-agents-hub/obsidian
+
+router:
+  specialist_selection:
+    min_confidence: 0.6
+    dual_specialist_delta: 0.08
+    max_specialists_per_turn: 2
+  synthesis:
+    enabled: true
+    model: gpt-4o-mini
+
+diagnostics:
+  enabled: true
+  endpoints:
+    health: /healthz
+    readiness: /readyz
+    diagnostics: /diagnostics
+
+logging:
+  level: INFO
+  output: both
+  directory: /var/log/ai-agents-hub
+  filename: ai-agents-hub.log
+  daily_rotation: true
+  retention_days: 14
+  utc: true
+  include_payloads: false
