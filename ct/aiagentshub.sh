@@ -15,26 +15,55 @@ var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
 var_unprivileged="${var_unprivileged:-1}"
 var_gpu="${var_gpu:-no}"
+AIHUB_REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
+AIHUB_REPO_REF="${REPO_REF:-master}"
+AIHUB_RAW_REPO_PATH="${RAW_REPO_PATH:-zigamilek/ai-agents-hub}"
+AIHUB_INSTALLER_URL="https://raw.githubusercontent.com/${AIHUB_RAW_REPO_PATH}/${AIHUB_REPO_REF}/install/aiagentshub-install.sh"
 
 header_info "$APP"
 variables
 color
 catch_errors
 
+# Keep the full tteck/container-build lifecycle, but replace only the final
+# app installer URL with this project's install script.
+curl() {
+  local target="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main/install/${var_install}.sh"
+  local args=()
+  local replaced=0
+  for arg in "$@"; do
+    if [[ "$arg" == "$target" ]]; then
+      args+=("$AIHUB_INSTALLER_URL")
+      replaced=1
+    else
+      args+=("$arg")
+    fi
+  done
+  if [[ "$replaced" -eq 1 ]]; then
+    msg_info "Using project installer: ${AIHUB_INSTALLER_URL}"
+  fi
+  command curl "${args[@]}"
+}
+
 function update_script() {
   header_info
   check_container_storage
   check_container_resources
 
+  if [[ "${VERBOSE:-no}" == "yes" ]]; then
+    set -x
+    msg_info "Verbose mode enabled: showing full command output."
+  fi
+
   local APP_DIR="/opt/ai-agents-hub"
   local CONFIG_DIR="/etc/ai-agents-hub"
   local DATA_DIR="/var/lib/ai-agents-hub"
   local SERVICE_NAME="ai-agents-hub"
-  local REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
-  local REPO_REF="${REPO_REF:-}"
+  local REPO_URL="${REPO_URL:-$AIHUB_REPO_URL}"
+  local REPO_REF="${REPO_REF:-$AIHUB_REPO_REF}"
 
   msg_info "Stopping ${SERVICE_NAME} service"
-  systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
+  $STD systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
   msg_ok "Stopped ${SERVICE_NAME} service"
 
   msg_info "Installing/updating OS dependencies"
@@ -50,34 +79,34 @@ function update_script() {
 
   msg_info "Updating repository"
   if [[ ! -d "${APP_DIR}/.git" ]]; then
-    rm -rf "${APP_DIR}"
-    if [[ -n "${REPO_REF}" ]]; then
-      git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" "${APP_DIR}"
+    $STD rm -rf "${APP_DIR}"
+    if [[ -n "${REPO_REF}" && "${REPO_REF}" != "HEAD" ]]; then
+      $STD git clone --depth 1 --branch "${REPO_REF}" "${REPO_URL}" "${APP_DIR}"
     else
-      git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
+      $STD git clone --depth 1 "${REPO_URL}" "${APP_DIR}"
     fi
   else
     pushd "${APP_DIR}" >/dev/null
-    if [[ -n "${REPO_REF}" ]]; then
-      git fetch origin "${REPO_REF}"
-      git checkout "${REPO_REF}"
-      git pull --ff-only origin "${REPO_REF}"
+    if [[ -n "${REPO_REF}" && "${REPO_REF}" != "HEAD" ]]; then
+      $STD git fetch origin "${REPO_REF}"
+      $STD git checkout "${REPO_REF}"
+      $STD git pull --ff-only origin "${REPO_REF}"
     else
-      git pull --ff-only
+      $STD git pull --ff-only
     fi
     popd >/dev/null
   fi
   msg_ok "Repository updated"
 
   msg_info "Rebuilding Python environment"
-  python3 -m venv "${APP_DIR}/.venv"
-  "${APP_DIR}/.venv/bin/pip" install --upgrade pip
-  "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
+  $STD python3 -m venv "${APP_DIR}/.venv"
+  $STD "${APP_DIR}/.venv/bin/pip" install --upgrade pip
+  $STD "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
   msg_ok "Python environment ready"
 
   msg_info "Refreshing runtime files"
-  mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" "${DATA_DIR}/memories" "${DATA_DIR}/obsidian" /var/log/ai-agents-hub
-  [[ -f "${CONFIG_DIR}/config.yaml" ]] || cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" "${DATA_DIR}/memories" "${DATA_DIR}/obsidian" /var/log/ai-agents-hub
+  [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
   if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
     cat <<'EOF' > "${CONFIG_DIR}/ai-agents-hub.env"
 OPENAI_API_KEY=
@@ -85,13 +114,13 @@ GEMINI_API_KEY=
 AI_AGENTS_HUB_API_KEY=change-me
 EOF
   fi
-  chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
+  $STD chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
   for prompt_file in "${APP_DIR}/prompts/specialists/"*.md; do
     prompt_name="$(basename "${prompt_file}")"
-    [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
+    [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
   done
-  cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
-  chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" /var/log/ai-agents-hub
+  $STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
+  $STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" "${DATA_DIR}" /var/log/ai-agents-hub
   msg_ok "Runtime files refreshed"
 
   msg_info "Restarting ${SERVICE_NAME}"
