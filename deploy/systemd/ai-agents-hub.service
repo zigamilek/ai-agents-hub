@@ -10,7 +10,7 @@ WorkingDirectory=/opt/ai-agents-hub
 EnvironmentFile=-/etc/ai-agents-hub/ai-agents-hub.env
 Environment=AI_AGENTS_HUB_CONFIG=/etc/ai-agents-hub/config.yaml
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/opt/ai-agents-hub/.venv/bin/ai-agents-hub
+ExecStart=/opt/ai-agents-hub/.venv/bin/ai-agents-hub serve --config /etc/ai-agents-hub/config.yaml
 Restart=always
 RestartSec=3
 TimeoutStartSec=30

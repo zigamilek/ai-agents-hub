@@ -61,6 +61,60 @@ function update_script() {
   local REPO_URL="${REPO_URL:-$AIHUB_REPO_URL}"
   local REPO_REF="${REPO_REF:-$AIHUB_REPO_REF}"
 
+  detect_service_port() {
+    local config_file="${CONFIG_DIR}/config.yaml"
+    local parsed=""
+    if [[ -f "${config_file}" ]]; then
+      parsed="$(
+        awk '
+          /^[[:space:]]*server:[[:space:]]*$/ { in_server=1; next }
+          in_server && /^[^[:space:]]/ { in_server=0 }
+          in_server && /^[[:space:]]*port:[[:space:]]*[0-9]+[[:space:]]*$/ {
+            line = $0
+            sub(/^[[:space:]]*port:[[:space:]]*/, "", line)
+            sub(/[[:space:]]*$/, "", line)
+            print line
+            exit
+          }
+        ' "${config_file}" 2>/dev/null || true
+      )"
+    fi
+    if [[ "${parsed}" =~ ^[0-9]+$ ]]; then
+      echo "${parsed}"
+    else
+      echo "8080"
+    fi
+  }
+
+  verify_service_start() {
+    local service_name="$1"
+    local port
+    local health_url
+    local i
+
+    if ! systemctl is-active --quiet "${service_name}"; then
+      msg_error "${service_name} is not active after startup."
+      systemctl status "${service_name}" --no-pager || true
+      journalctl -u "${service_name}" -n 120 --no-pager || true
+      return 1
+    fi
+
+    port="$(detect_service_port)"
+    health_url="http://127.0.0.1:${port}/healthz"
+    for i in {1..20}; do
+      if curl -fsS --max-time 2 "${health_url}" >/dev/null 2>&1; then
+        msg_ok "Service health check passed: ${health_url}"
+        return 0
+      fi
+      sleep 1
+    done
+
+    msg_error "Service failed health checks: ${health_url}"
+    systemctl status "${service_name}" --no-pager || true
+    journalctl -u "${service_name}" -n 120 --no-pager || true
+    return 1
+  }
+
   msg_info "Stopping ${SERVICE_NAME} service"
   $STD systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
   msg_ok "Stopped ${SERVICE_NAME} service"
@@ -130,6 +184,7 @@ EOF
   msg_info "Restarting ${SERVICE_NAME}"
   $STD systemctl daemon-reload
   $STD systemctl enable -q --now "${SERVICE_NAME}"
+  verify_service_start "${SERVICE_NAME}"
   msg_ok "Updated successfully"
 
   msg_ok "Use 'ai-agents-hub onboard' to update env/config interactively."
