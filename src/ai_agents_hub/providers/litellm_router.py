@@ -20,7 +20,7 @@ class LiteLLMRouter:
             specialists.general,
             specialists.health,
             specialists.parenting,
-            specialists.relationship,
+            specialists.relationships,
             specialists.homelab,
             specialists.personal_development,
             *self.config.models.fallbacks,

@@ -28,7 +28,7 @@ def test_prompt_auto_reload_on_change(tmp_path: Path) -> None:
         "general",
         "health",
         "parenting",
-        "relationship",
+        "relationships",
         "homelab",
         "personal_development",
     ):

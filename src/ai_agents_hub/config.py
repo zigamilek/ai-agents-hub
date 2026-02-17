@@ -40,7 +40,7 @@ class SpecialistModels(BaseModel):
     general: str = "gpt-4o-mini"
     health: str = "gpt-4o-mini"
     parenting: str = "gpt-4o-mini"
-    relationship: str = "gpt-4o-mini"
+    relationships: str = "gpt-4o-mini"
     homelab: str = "gemini-2.5-flash"
     personal_development: str = "gpt-4o-mini"
 
@@ -59,13 +59,13 @@ class SpecialistPromptFilesConfig(BaseModel):
     general: str = "general.md"
     health: str = "health.md"
     parenting: str = "parenting.md"
-    relationship: str = "relationship.md"
+    relationships: str = "relationships.md"
     homelab: str = "homelab.md"
     personal_development: str = "personal_development.md"
 
 
 class SpecialistPromptsConfig(BaseModel):
-    directory: Path = Path("/etc/ai-agents-hub/prompts/specialists")
+    directory: Path = Path("/etc/ai-agents-hub/system_prompts")
     auto_reload: bool = True
     files: SpecialistPromptFilesConfig = Field(default_factory=SpecialistPromptFilesConfig)
 

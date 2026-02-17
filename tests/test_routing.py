@@ -25,7 +25,7 @@ def test_prompt_file_reload_and_general_prompt_override(tmp_path: Path) -> None:
         "general.md": "General prompt one",
         "health.md": "Health prompt",
         "parenting.md": "Parenting prompt",
-        "relationship.md": "Relationship prompt",
+        "relationships.md": "Relationships prompt",
         "homelab.md": "Homelab prompt",
         "personal_development.md": "Personal development prompt",
     }

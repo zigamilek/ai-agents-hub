@@ -121,7 +121,7 @@ def run_onboarding(
         port = config.server.port
 
     prompts_dir = _prompt_text(
-        "Specialist prompts directory",
+        "System prompts directory",
         str(config.specialists.prompts.directory),
     )
 

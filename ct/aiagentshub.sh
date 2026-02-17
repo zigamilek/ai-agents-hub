@@ -163,7 +163,7 @@ function update_script() {
   msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
 
   msg_info "Refreshing runtime files"
-  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/prompts/specialists" /var/log/ai-agents-hub
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/ai-agents-hub
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
   if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
     cat <<'EOF' > "${CONFIG_DIR}/ai-agents-hub.env"
@@ -173,9 +173,9 @@ AI_AGENTS_HUB_API_KEY=change-me
 EOF
   fi
   $STD chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
-  for prompt_file in "${APP_DIR}/prompts/specialists/"*.md; do
+  for prompt_file in "${APP_DIR}/system_prompts/"*.md; do
     prompt_name="$(basename "${prompt_file}")"
-    [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
+    [[ -f "${CONFIG_DIR}/system_prompts/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/system_prompts/${prompt_name}"
   done
   $STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
   $STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub

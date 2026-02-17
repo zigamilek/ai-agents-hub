@@ -181,7 +181,7 @@ def test_live_openwebui_like_routing_flow() -> None:
 
     # Keep probe focused on orchestrator + specialist routing behavior.
     cfg.models.fallbacks = []
-    cfg.specialists.prompts.directory = Path("prompts/specialists").resolve()
+    cfg.specialists.prompts.directory = Path("system_prompts").resolve()
     if not cfg.providers.gemini.api_key:
         cfg.models.specialists.homelab = cfg.models.specialists.general
 

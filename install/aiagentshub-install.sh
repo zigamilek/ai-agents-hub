@@ -84,7 +84,7 @@ fi
 msg_ok "Service user ready"
 
 msg_info "Preparing directories"
-$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/prompts/specialists" /var/log/ai-agents-hub
+$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/ai-agents-hub
 msg_ok "Directories prepared"
 
 msg_info "Cloning repository"
@@ -122,9 +122,9 @@ EOF
 fi
 $STD chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
 
-for prompt_file in "${APP_DIR}/prompts/specialists/"*.md; do
+for prompt_file in "${APP_DIR}/system_prompts/"*.md; do
   prompt_name="$(basename "${prompt_file}")"
-  [[ -f "${CONFIG_DIR}/prompts/specialists/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/prompts/specialists/${prompt_name}"
+  [[ -f "${CONFIG_DIR}/system_prompts/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/system_prompts/${prompt_name}"
 done
 msg_ok "Configuration installed"
 

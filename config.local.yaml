@@ -14,12 +14,12 @@ providers:
 models:
   orchestrator: gpt-5-nano-2025-08-07
   specialists:
-    general: gpt-4o-mini
-    health: gpt-4o-mini
-    parenting: gpt-4o-mini
-    relationship: gpt-4o-mini
-    homelab: gemini-2.5-flash
-    personal_development: gpt-4o-mini
+    general: gpt-5.2
+    health: gpt-5.2
+    parenting: gpt-5.2
+    relationships: gpt-5.2
+    homelab: gpt-5.2
+    personal_development: gpt-5.2
   fallbacks:
     - gemini-2.5-flash
 
@@ -30,14 +30,14 @@ api:
 
 specialists:
   prompts:
-    directory: ./prompts/specialists
+    directory: ./system_prompts
     auto_reload: true
     files:
       orchestrator: orchestrator.md
       general: general.md
       health: health.md
       parenting: parenting.md
-      relationship: relationship.md
+      relationships: relationships.md
       homelab: homelab.md
       personal_development: personal_development.md
 

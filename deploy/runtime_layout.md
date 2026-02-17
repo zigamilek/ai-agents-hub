@@ -6,7 +6,7 @@ AI Agents Hub uses persistent paths so the service survives restarts.
 - Config: `/etc/ai-agents-hub/config.yaml`
 - Environment file: `/etc/ai-agents-hub/ai-agents-hub.env`
 - Logs: `/var/log/ai-agents-hub`
-- Specialist prompts: `/etc/ai-agents-hub/prompts/specialists/*.md`
+- System prompts: `/etc/ai-agents-hub/system_prompts/*.md`
 
 ## Diagnostics
 

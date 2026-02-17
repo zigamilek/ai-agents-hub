@@ -11,7 +11,7 @@ PROMPT_KEYS: tuple[str, ...] = (
     "general",
     "health",
     "parenting",
-    "relationship",
+    "relationships",
     "homelab",
     "personal_development",
 )
@@ -33,8 +33,8 @@ DEFAULT_PROMPTS: dict[str, str] = {
         "You are the parenting specialist. Give empathetic, actionable, "
         "age-appropriate guidance."
     ),
-    "relationship": (
-        "You are the relationship specialist. Support respectful communication, "
+    "relationships": (
+        "You are the relationships specialist. Support respectful communication, "
         "boundaries, and practical conflict resolution."
     ),
     "homelab": (

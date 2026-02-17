@@ -36,11 +36,11 @@ SPECIALISTS: tuple[SpecialistProfile, ...] = (
         ),
     ),
     SpecialistProfile(
-        domain="relationship",
-        label="Relationship Specialist",
+        domain="relationships",
+        label="Relationships Specialist",
         routing_hint=(
             "Couple/partner issues, communication conflicts, boundaries, trust, intimacy, "
-            "relationship repair and maintenance."
+            "repairing and maintaining relationships."
         ),
     ),
     SpecialistProfile(

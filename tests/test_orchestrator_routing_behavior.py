@@ -68,7 +68,7 @@ class StubPromptManager:
             "general": "general prompt",
             "health": "health prompt",
             "parenting": "parenting prompt",
-            "relationship": "relationship prompt",
+            "relationships": "relationships prompt",
             "homelab": "homelab prompt",
             "personal_development": "personal development prompt",
         }
@@ -84,7 +84,7 @@ def _config() -> AppConfig:
                     "general": "gpt-4o-mini",
                     "health": "gpt-4o-mini",
                     "parenting": "gpt-4o-mini",
-                    "relationship": "gpt-4o-mini",
+                    "relationships": "gpt-4o-mini",
                     "homelab": "gemini-2.5-flash",
                     "personal_development": "gpt-4o-mini",
                 },

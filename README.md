@@ -45,7 +45,7 @@ models:
 ```
 
 On each turn, the orchestrator chooses exactly one specialist domain from:
-`general`, `health`, `parenting`, `relationship`, `homelab`, `personal_development`.
+`general`, `health`, `parenting`, `relationships`, `homelab`, `personal_development`.
 
 For non-general routes, the assistant response starts with:
 
@@ -189,22 +189,22 @@ Direct browser-side connection checks can fail with `OpenAI: Network Problem` wh
 
 Prompts are loaded from markdown files in:
 
-- local: `./prompts/specialists`
-- LXC service default: `/etc/ai-agents-hub/prompts/specialists`
+- local: `./system_prompts`
+- LXC service default: `/etc/ai-agents-hub/system_prompts`
 
 Config location:
 
 ```yaml
 specialists:
   prompts:
-    directory: ./prompts/specialists
+    directory: ./system_prompts
     auto_reload: true
     files:
       orchestrator: orchestrator.md
       general: general.md
       health: health.md
       parenting: parenting.md
-      relationship: relationship.md
+      relationships: relationships.md
       homelab: homelab.md
       personal_development: personal_development.md
 ```
