@@ -156,7 +156,7 @@ def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> N
     )
     response = asyncio.run(orchestrator.complete_non_stream(request))
     content = response["choices"][0]["message"]["content"]
-    assert content.startswith("Answered by the health specialist.\n\n")
+    assert content.startswith("*Answered by the health specialist.*\n\n")
     assert "Do wrist extensor isometrics daily." in content
     assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
 

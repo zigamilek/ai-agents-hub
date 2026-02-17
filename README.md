@@ -52,7 +52,7 @@ On each turn, the orchestrator chooses exactly one specialist domain from:
 
 For non-general routes, the assistant response starts with:
 
-`Answered by the <specialist> specialist.`
+`*Answered by the <specialist> specialist.*`
 
 ## Run Locally
 

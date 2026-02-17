@@ -16,7 +16,7 @@ from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 
-PREFIX_RE = re.compile(r"^Answered by the (?P<label>.+?) specialist\.$")
+PREFIX_RE = re.compile(r"^\*Answered by the (?P<label>.+?) specialist\.\*$")
 
 
 def _live_enabled() -> bool:

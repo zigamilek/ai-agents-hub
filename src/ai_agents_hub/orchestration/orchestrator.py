@@ -130,7 +130,7 @@ class Orchestrator:
         if domain == "general":
             return ""
         label = domain.replace("_", " ")
-        return f"Answered by the {label} specialist.\n\n"
+        return f"*Answered by the {label} specialist.*\n\n"
 
     def _build_orchestrated_messages(
         self,
