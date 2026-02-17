@@ -82,6 +82,17 @@ Tail daily-rotating log file:
 tail -f data/logs/ai-agents-hub.log
 ```
 
+### Local Behavior Tests
+
+You can validate routing and memory behavior locally before pushing/deploying:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e '.[dev]'
+python -m pytest -q tests/test_specialist_router.py tests/test_supervisor_routing_behavior.py tests/test_memory_curator.py tests/test_memory_workflow.py
+```
+
 ## Install in Proxmox LXC
 
 ### Tteck-Style One-liner (Proxmox host)

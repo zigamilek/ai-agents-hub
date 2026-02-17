@@ -1,0 +1,194 @@
+from __future__ import annotations
+
+import asyncio
+from dataclasses import dataclass
+from typing import Any
+
+from ai_agents_hub.api.schemas import ChatCompletionRequest
+from ai_agents_hub.config import AppConfig
+from ai_agents_hub.orchestration.specialist_router import SpecialistRoute
+from ai_agents_hub.orchestration.supervisor import Supervisor
+
+
+class StubLLMRouter:
+    def __init__(self, answer_text: str = "Specialist answer.") -> None:
+        self.answer_text = answer_text
+        self.calls: list[dict[str, Any]] = []
+
+    def list_models(self) -> list[str]:
+        return [
+            "gpt-5-nano-2025-08-07",
+            "gpt-4o-mini",
+            "gemini-2.5-flash",
+        ]
+
+    async def chat_completion(
+        self,
+        *,
+        primary_model: str,
+        messages: list[dict[str, Any]],
+        stream: bool,
+        passthrough: dict[str, Any] | None = None,
+        include_fallbacks: bool = True,
+    ) -> tuple[str, Any]:
+        self.calls.append(
+            {
+                "primary_model": primary_model,
+                "messages": messages,
+                "stream": stream,
+                "passthrough": passthrough or {},
+                "include_fallbacks": include_fallbacks,
+            }
+        )
+        return primary_model, {"choices": [{"message": {"content": self.answer_text}}]}
+
+
+@dataclass
+class StubSpecialistRouter:
+    domain: str
+    confidence: float = 0.91
+    reason: str = "test"
+    classifier_model: str = "gpt-5-nano-2025-08-07"
+    latest_seen_text: str = ""
+
+    async def classify(self, latest_user_text: str) -> SpecialistRoute:
+        self.latest_seen_text = latest_user_text
+        return SpecialistRoute(
+            domain=self.domain,
+            confidence=self.confidence,
+            reason=self.reason,
+            classifier_model=self.classifier_model,
+        )
+
+
+class StubMemoryStore:
+    def undo_memory(self, _memory_id: str) -> bool:
+        return False
+
+    def edit_memory(self, _memory_id: str, _instructions: str) -> bool:
+        return False
+
+
+class StubMemoryCurator:
+    async def maybe_capture(
+        self, *, domain: str, user_text: str, assistant_text: str
+    ) -> None:
+        return None
+
+
+class StubToolRunner:
+    async def maybe_search(self, _user_text: str) -> list[Any]:
+        return []
+
+    @staticmethod
+    def sources_context_block(_sources: list[Any]) -> str:
+        return ""
+
+
+class StubPromptManager:
+    def get(self, key: str) -> str:
+        prompts = {
+            "supervisor": "supervisor prompt",
+            "general": "general prompt",
+            "health": "health prompt",
+            "parenting": "parenting prompt",
+            "relationship": "relationship prompt",
+            "homelab": "homelab prompt",
+            "personal_development": "personal development prompt",
+        }
+        return prompts.get(key, f"{key} prompt")
+
+
+def _config() -> AppConfig:
+    return AppConfig.model_validate(
+        {
+            "memory": {"auto_write": False},
+            "journal": {"enabled": False},
+            "models": {
+                "default_chat": "gpt-5-nano-2025-08-07",
+                "routing": {
+                    "general": "gpt-4o-mini",
+                    "health": "gpt-4o-mini",
+                    "parenting": "gpt-4o-mini",
+                    "relationship": "gpt-4o-mini",
+                    "homelab": "gemini-2.5-flash",
+                    "personal_development": "gpt-4o-mini",
+                },
+            },
+        }
+    )
+
+
+def _request(messages: list[dict[str, Any]]) -> ChatCompletionRequest:
+    return ChatCompletionRequest.model_validate(
+        {
+            "model": "ai-agents-hub",
+            "messages": messages,
+            "stream": False,
+        }
+    )
+
+
+def _build_supervisor(
+    *,
+    domain: str,
+    answer_text: str = "Specialist answer.",
+) -> tuple[Supervisor, StubLLMRouter, StubSpecialistRouter]:
+    cfg = _config()
+    llm_router = StubLLMRouter(answer_text=answer_text)
+    specialist_router = StubSpecialistRouter(domain=domain)
+    supervisor = Supervisor(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        memory_store=StubMemoryStore(),  # type: ignore[arg-type]
+        memory_curator=StubMemoryCurator(),  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        tool_runner=StubToolRunner(),  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+        journal_writer=None,
+    )
+    return supervisor, llm_router, specialist_router
+
+
+def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> None:
+    supervisor, llm_router, _specialist_router = _build_supervisor(
+        domain="health",
+        answer_text="Do wrist extensor isometrics daily.",
+    )
+    request = _request(
+        [{"role": "user", "content": "Can you help with tennis elbow rehab?"}]
+    )
+    response = asyncio.run(supervisor.complete_non_stream(request))
+    content = response["choices"][0]["message"]["content"]
+    assert content.startswith("Answered by the health specialist.\n\n")
+    assert "Do wrist extensor isometrics daily." in content
+    assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
+
+
+def test_general_response_has_no_specialist_prefix() -> None:
+    supervisor, llm_router, _specialist_router = _build_supervisor(
+        domain="general",
+        answer_text="Let's make a weekly plan.",
+    )
+    request = _request([{"role": "user", "content": "Help me plan my week."}])
+    response = asyncio.run(supervisor.complete_non_stream(request))
+    content = response["choices"][0]["message"]["content"]
+    assert not content.startswith("Answered by the")
+    assert content.startswith("Let's make a weekly plan.")
+    assert llm_router.calls[0]["primary_model"] == "gpt-4o-mini"
+
+
+def test_routing_uses_latest_user_message_only() -> None:
+    supervisor, _llm_router, specialist_router = _build_supervisor(
+        domain="parenting",
+        answer_text="Use calm boundaries and consistency.",
+    )
+    request = _request(
+        [
+            {"role": "user", "content": "I need infrastructure advice."},
+            {"role": "assistant", "content": "Sure, tell me more."},
+            {"role": "user", "content": "Actually, my son ignores instructions."},
+        ]
+    )
+    asyncio.run(supervisor.complete_non_stream(request))
+    assert specialist_router.latest_seen_text == "Actually, my son ignores instructions."

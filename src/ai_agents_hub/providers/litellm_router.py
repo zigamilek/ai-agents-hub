@@ -50,8 +50,13 @@ class LiteLLMRouter:
         messages: list[dict[str, Any]],
         stream: bool,
         passthrough: dict[str, Any] | None = None,
+        include_fallbacks: bool = True,
     ) -> tuple[str, Any]:
-        models_to_try = [primary_model, *self.config.models.fallbacks]
+        models_to_try = (
+            [primary_model, *self.config.models.fallbacks]
+            if include_fallbacks
+            else [primary_model]
+        )
         seen: set[str] = set()
         ordered_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
 

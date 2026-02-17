@@ -107,58 +107,70 @@ class SpecialistRouter:
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_text},
         ]
-        try:
-            used_model, raw = await self.llm_router.chat_completion(
-                primary_model=self.model,
-                messages=messages,
-                stream=False,
-                passthrough={"temperature": 0.0, "max_tokens": 120},
-            )
-            parsed = _response_to_dict(raw)
-            text = _extract_text(parsed)
-            payload = _extract_json_payload(text)
-            domain = normalize_domain(str(payload.get("specialist", "") or ""))
-            if domain not in self.allowed_domains:
-                self.logger.warning(
-                    "Classifier returned invalid specialist '%s'; using general.", domain
+        candidates: list[str] = [self.model]
+        if self.model.startswith("gpt-") and "/" not in self.model:
+            candidates.append(f"openai/{self.model}")
+
+        last_error: Exception | None = None
+        for candidate_model in candidates:
+            try:
+                # Keep classifier call minimal because some models reject optional
+                # generation params like temperature/max_tokens.
+                used_model, raw = await self.llm_router.chat_completion(
+                    primary_model=candidate_model,
+                    messages=messages,
+                    stream=False,
+                    passthrough=None,
+                    include_fallbacks=False,
+                )
+                parsed = _response_to_dict(raw)
+                text = _extract_text(parsed)
+                payload = _extract_json_payload(text)
+                domain = normalize_domain(str(payload.get("specialist", "") or ""))
+                if domain not in self.allowed_domains:
+                    self.logger.warning(
+                        "Classifier returned invalid specialist '%s'; using general.", domain
+                    )
+                    return SpecialistRoute(
+                        domain="general",
+                        confidence=0.0,
+                        reason="invalid-specialist",
+                        classifier_model=used_model,
+                    )
+                confidence_raw = payload.get("confidence", 0.0)
+                try:
+                    confidence = float(confidence_raw)
+                except Exception:
+                    confidence = 0.0
+                confidence = max(0.0, min(1.0, confidence))
+                reason = str(payload.get("reason", "") or "").strip()
+                chosen = get_specialist(domain)
+                self.logger.debug(
+                    "Classifier routed domain=%s confidence=%.2f reason=%s model=%s",
+                    chosen.domain,
+                    confidence,
+                    reason,
+                    used_model,
                 )
                 return SpecialistRoute(
-                    domain="general",
-                    confidence=0.0,
-                    reason="invalid-specialist",
+                    domain=chosen.domain,
+                    confidence=confidence,
+                    reason=reason,
                     classifier_model=used_model,
                 )
-            confidence_raw = payload.get("confidence", 0.0)
-            try:
-                confidence = float(confidence_raw)
-            except Exception:
-                confidence = 0.0
-            confidence = max(0.0, min(1.0, confidence))
-            reason = str(payload.get("reason", "") or "").strip()
-            chosen = get_specialist(domain)
-            self.logger.debug(
-                "Classifier routed domain=%s confidence=%.2f reason=%s model=%s",
-                chosen.domain,
-                confidence,
-                reason,
-                used_model,
-            )
-            return SpecialistRoute(
-                domain=chosen.domain,
-                confidence=confidence,
-                reason=reason,
-                classifier_model=used_model,
-            )
-        except Exception as exc:
-            self.logger.warning(
-                "Classifier routing failed model=%s error=%s",
-                self.model,
-                exc.__class__.__name__,
-            )
-            self.logger.debug("Classifier routing details: %s", str(exc))
-            return SpecialistRoute(
-                domain="general",
-                confidence=0.0,
-                reason=f"classifier-error:{exc.__class__.__name__}",
-                classifier_model=None,
-            )
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    "Classifier routing failed model=%s error=%s",
+                    candidate_model,
+                    exc.__class__.__name__,
+                )
+                self.logger.debug("Classifier routing details: %s", str(exc))
+
+        error_name = last_error.__class__.__name__ if last_error else "UnknownError"
+        return SpecialistRoute(
+            domain="general",
+            confidence=0.0,
+            reason=f"classifier-error:{error_name}",
+            classifier_model=None,
+        )

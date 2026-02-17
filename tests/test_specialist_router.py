@@ -8,9 +8,15 @@ from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
 
 
 class StubLLMRouter:
-    def __init__(self, outputs: list[str], model_name: str = "gpt-5-nano-2025-08-07") -> None:
+    def __init__(
+        self,
+        outputs: list[str],
+        model_name: str = "gpt-5-nano-2025-08-07",
+        fail_for_models: set[str] | None = None,
+    ) -> None:
         self.outputs = outputs
         self.model_name = model_name
+        self.fail_for_models = fail_for_models or set()
         self.calls: list[dict[str, Any]] = []
 
     async def chat_completion(
@@ -20,6 +26,7 @@ class StubLLMRouter:
         messages: list[dict[str, Any]],
         stream: bool,
         passthrough: dict[str, Any] | None = None,
+        include_fallbacks: bool = True,
     ) -> tuple[str, Any]:
         self.calls.append(
             {
@@ -27,8 +34,11 @@ class StubLLMRouter:
                 "messages": messages,
                 "stream": stream,
                 "passthrough": passthrough or {},
+                "include_fallbacks": include_fallbacks,
             }
         )
+        if primary_model in self.fail_for_models:
+            raise RuntimeError(f"forced-failure:{primary_model}")
         content = self.outputs.pop(0)
         return self.model_name, {"choices": [{"message": {"content": content}}]}
 
@@ -62,6 +72,8 @@ def test_classifier_routes_to_health_domain() -> None:
     assert result.domain == "health"
     assert result.confidence == 0.92
     assert result.classifier_model == "gpt-5-nano-2025-08-07"
+    assert llm.calls[0]["include_fallbacks"] is False
+    assert llm.calls[0]["passthrough"] == {}
 
 
 def test_classifier_falls_back_to_general_for_invalid_specialist() -> None:
@@ -82,3 +94,19 @@ def test_classifier_falls_back_to_general_for_invalid_json() -> None:
     result = asyncio.run(router.classify("I need advice"))
     assert result.domain == "general"
     assert result.reason == "invalid-specialist"
+
+
+def test_classifier_tries_openai_prefix_for_gpt_models() -> None:
+    llm = StubLLMRouter(
+        outputs=[
+            '{"specialist":"homelab","confidence":0.81,"reason":"infrastructure topic"}'
+        ],
+        fail_for_models={"gpt-5-nano-2025-08-07"},
+    )
+    router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
+    result = asyncio.run(router.classify("How can I improve my Proxmox backups?"))
+    assert result.domain == "homelab"
+    assert [call["primary_model"] for call in llm.calls] == [
+        "gpt-5-nano-2025-08-07",
+        "openai/gpt-5-nano-2025-08-07",
+    ]
