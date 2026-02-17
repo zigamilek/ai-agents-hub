@@ -27,9 +27,13 @@ class LiteLLMRouter:
         }
         return sorted([model for model in candidates if model])
 
-    def _provider_kwargs(self, model: str) -> dict[str, Any]:
+    @staticmethod
+    def _is_gemini_model(model: str) -> bool:
         lower = model.lower()
-        if lower.startswith("gemini"):
+        return lower.startswith("gemini") or lower.startswith("openai/gemini")
+
+    def _provider_kwargs(self, model: str) -> dict[str, Any]:
+        if self._is_gemini_model(model):
             return {
                 "api_key": self.config.providers.gemini.api_key,
                 "base_url": self.config.providers.gemini.base_url,
@@ -38,6 +42,19 @@ class LiteLLMRouter:
             "api_key": self.config.providers.openai.api_key,
             "base_url": self.config.providers.openai.base_url,
         }
+
+    def _litellm_model_for_call(self, model: str) -> str:
+        if not self._is_gemini_model(model):
+            return model
+
+        # Force Gemini to go through Google's OpenAI-compatible endpoint when
+        # configured, avoiding accidental Vertex/Google SDK code paths.
+        base_url = (self.config.providers.gemini.base_url or "").lower()
+        if "/openai" not in base_url:
+            return model
+        if model.startswith("openai/"):
+            return model
+        return f"openai/{model}"
 
     @staticmethod
     def _clean(kwargs: dict[str, Any]) -> dict[str, Any]:
@@ -69,8 +86,9 @@ class LiteLLMRouter:
                     stream,
                     max(0, len(ordered_models) - 1),
                 )
+                litellm_model = self._litellm_model_for_call(model)
                 call_kwargs = {
-                    "model": model,
+                    "model": litellm_model,
                     "messages": messages,
                     "stream": stream,
                     **self._provider_kwargs(model),
