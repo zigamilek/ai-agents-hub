@@ -12,7 +12,7 @@ providers:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
 
 models:
-  default_chat: gpt-4o-mini
+  default_chat: gpt-5-nano-2025-08-07
   routing:
     general: gpt-4o-mini
     health: gpt-4o-mini

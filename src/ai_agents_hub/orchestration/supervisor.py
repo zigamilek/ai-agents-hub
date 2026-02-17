@@ -14,10 +14,8 @@ from ai_agents_hub.journal.obsidian_writer import ObsidianJournalWriter
 from ai_agents_hub.logging_setup import get_logger
 from ai_agents_hub.memory.curator import MemoryCurator
 from ai_agents_hub.memory.store import MemoryRecord, MemoryStore
-from ai_agents_hub.orchestration.specialists import (
-    SpecialistProfile,
-    rank_specialists,
-)
+from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
+from ai_agents_hub.orchestration.specialists import SpecialistProfile, get_specialist
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 from ai_agents_hub.tools.runner import ToolRunner
@@ -31,6 +29,7 @@ class RoutingDecision:
     confidence: float
     route_model: str
     response_model: str
+    classifier_model: str | None
 
 
 def _now_unix() -> int:
@@ -76,6 +75,7 @@ class Supervisor:
         llm_router: LiteLLMRouter,
         memory_store: MemoryStore,
         memory_curator: MemoryCurator,
+        specialist_router: SpecialistRouter,
         tool_runner: ToolRunner,
         prompt_manager: PromptManager,
         journal_writer: ObsidianJournalWriter | None,
@@ -84,6 +84,7 @@ class Supervisor:
         self.llm_router = llm_router
         self.memory_store = memory_store
         self.memory_curator = memory_curator
+        self.specialist_router = specialist_router
         self.tool_runner = tool_runner
         self.prompt_manager = prompt_manager
         self.journal_writer = journal_writer
@@ -94,28 +95,15 @@ class Supervisor:
         )
         self.provider_model_ids = set(self.llm_router.list_models())
 
-    def _decide_routing(self, user_text: str, requested_model: str | None) -> RoutingDecision:
-        ranked = rank_specialists(user_text)
+    async def _decide_routing(
+        self, user_text: str, requested_model: str | None
+    ) -> RoutingDecision:
+        route = await self.specialist_router.classify(user_text)
+        domain = route.domain
+        confidence = route.confidence
         selected: list[SpecialistProfile] = []
-        confidence = 0.0
-        domain = "general"
-        threshold = self.config.router.specialist_selection.min_confidence
-        delta = self.config.router.specialist_selection.dual_specialist_delta
-        max_specialists = self.config.router.specialist_selection.max_specialists_per_turn
-
-        if ranked:
-            top_spec, top_score = ranked[0]
-            if top_score >= threshold:
-                selected.append(top_spec)
-                confidence = top_score
-                domain = top_spec.domain
-            if (
-                len(ranked) > 1
-                and len(selected) < max_specialists
-                and (top_score - ranked[1][1]) <= delta
-                and ranked[1][1] >= threshold
-            ):
-                selected.append(ranked[1][0])
+        if domain != "general":
+            selected = [get_specialist(domain)]
 
         requested = (requested_model or "").strip()
         passthrough = (
@@ -147,14 +135,16 @@ class Supervisor:
             confidence=confidence,
             route_model=route_model,
             response_model=response_model,
+            classifier_model=route.classifier_model,
         )
         self.logger.debug(
-            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s requested_model=%s passthrough=%s",
+            "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s classifier_model=%s requested_model=%s passthrough=%s",
             decision.domain,
             decision.confidence,
             [item.domain for item in decision.selected],
             decision.route_model,
             decision.response_model,
+            decision.classifier_model,
             requested_model,
             passthrough,
         )
@@ -209,6 +199,13 @@ class Supervisor:
         for idx, source in enumerate(sources, start=1):
             lines.append(f"- [S{idx}] {source.title} - {source.url}")
         return "\n".join(lines)
+
+    @staticmethod
+    def _answered_by_prefix(domain: str) -> str:
+        if domain == "general":
+            return ""
+        label = domain.replace("_", " ")
+        return f"Answered by the {label} specialist.\n\n"
 
     def _notification_block(self, record: MemoryRecord | None) -> str:
         if not record or not record.created or not self.config.memory.notify_on_write:
@@ -301,7 +298,7 @@ class Supervisor:
             self.logger.debug("Control command handled in non-stream mode.")
             return control
 
-        decision = self._decide_routing(user_text, request.model)
+        decision = await self._decide_routing(user_text, request.model)
         sources = await self.tool_runner.maybe_search(user_text)
         self.logger.debug("Source count=%d", len(sources))
         messages = self._build_orchestrated_messages(request, decision, sources)
@@ -325,8 +322,11 @@ class Supervisor:
             assistant_text=assistant_text,
             decision=decision,
         )
-        augmented = assistant_text + self._sources_block(sources) + self._notification_block(
-            record
+        augmented = (
+            self._answered_by_prefix(decision.domain)
+            + assistant_text
+            + self._sources_block(sources)
+            + self._notification_block(record)
         )
         if journal_path:
             augmented += f"\n- journal: `{journal_path}`"
@@ -359,7 +359,7 @@ class Supervisor:
             self.logger.debug("Control command handled in stream mode.")
             return
 
-        decision = self._decide_routing(user_text, request.model)
+        decision = await self._decide_routing(user_text, request.model)
         sources = await self.tool_runner.maybe_search(user_text)
         messages = self._build_orchestrated_messages(request, decision, sources)
         passthrough = request.model_dump(
@@ -376,6 +376,8 @@ class Supervisor:
         collected: list[str] = []
         stream_id: str | None = None
         chunk_count = 0
+        prefix = self._answered_by_prefix(decision.domain)
+        prefix_pending = bool(prefix)
         async for chunk in stream:
             as_dict = _chunk_to_dict(chunk)
             stream_id = stream_id or as_dict.get("id")
@@ -387,6 +389,30 @@ class Supervisor:
                     collected.append(piece)
             except Exception:
                 pass
+            if prefix_pending:
+                try:
+                    delta = as_dict["choices"][0].setdefault("delta", {})
+                    content_piece = delta.get("content")
+                    if isinstance(content_piece, str):
+                        delta["content"] = prefix + content_piece
+                    else:
+                        delta["content"] = prefix
+                except Exception:
+                    fallback_prefix_chunk = {
+                        "id": stream_id or f"chatcmpl-{uuid4().hex}",
+                        "object": "chat.completion.chunk",
+                        "created": int(datetime.now(timezone.utc).timestamp()),
+                        "model": decision.response_model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": prefix},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(fallback_prefix_chunk)}\n\n".encode("utf-8")
+                prefix_pending = False
             as_dict["model"] = decision.response_model
             yield f"data: {json.dumps(as_dict)}\n\n".encode("utf-8")
 

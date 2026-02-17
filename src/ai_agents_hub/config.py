@@ -50,7 +50,7 @@ class RoutingModels(BaseModel):
 
 
 class ModelsConfig(BaseModel):
-    default_chat: str = "gpt-4o-mini"
+    default_chat: str = "gpt-5-nano-2025-08-07"
     routing: RoutingModels = Field(default_factory=RoutingModels)
     fallbacks: list[str] = Field(default_factory=list)
 

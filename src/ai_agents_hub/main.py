@@ -12,6 +12,7 @@ from ai_agents_hub.journal.obsidian_writer import ObsidianJournalWriter
 from ai_agents_hub.logging_setup import configure_logging, get_logger
 from ai_agents_hub.memory.curator import MemoryCurator
 from ai_agents_hub.memory.store import MemoryStore
+from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
 from ai_agents_hub.orchestration.supervisor import Supervisor
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
@@ -36,6 +37,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
         llm_router=llm_router,
         memory_store=memory_store,
     )
+    specialist_router = SpecialistRouter(config=config, llm_router=llm_router)
     tool_runner = ToolRunner(config)
     prompt_manager = PromptManager(config)
     journal_writer = (
@@ -52,6 +54,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
         llm_router=llm_router,
         memory_store=memory_store,
         memory_curator=memory_curator,
+        specialist_router=specialist_router,
         tool_runner=tool_runner,
         prompt_manager=prompt_manager,
         journal_writer=journal_writer,
@@ -60,6 +63,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
         "config": config,
         "memory_store": memory_store,
         "memory_curator": memory_curator,
+        "specialist_router": specialist_router,
         "llm_router": llm_router,
         "tool_runner": tool_runner,
         "prompt_manager": prompt_manager,

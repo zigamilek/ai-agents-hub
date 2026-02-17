@@ -31,6 +31,24 @@ Use:
 
 For local macOS testing, use `config.local.yaml` so data and logs stay under `./data`.
 
+### Specialist Routing Model
+
+`models.default_chat` is used as the specialist routing classifier model.
+
+Default:
+
+```yaml
+models:
+  default_chat: gpt-5-nano-2025-08-07
+```
+
+On each turn, the classifier chooses exactly one specialist domain from:
+`general`, `health`, `parenting`, `relationship`, `homelab`, `personal_development`.
+
+For non-general routes, the assistant response starts with:
+
+`Answered by the <specialist> specialist.`
+
 ## Run Locally
 
 ```bash

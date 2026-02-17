@@ -3,21 +3,18 @@ from __future__ import annotations
 from pathlib import Path
 
 from ai_agents_hub.config import AppConfig
-from ai_agents_hub.orchestration.specialists import rank_specialists
+from ai_agents_hub.orchestration.specialists import get_specialist, normalize_domain
 from ai_agents_hub.prompts.manager import PromptManager
 
 
-def test_health_specialist_ranked_first() -> None:
-    ranked = rank_specialists("I need help improving sleep and workout recovery")
-    assert ranked
-    assert ranked[0][0].domain == "health"
-    assert ranked[0][1] >= 0.6
+def test_specialist_lookup_returns_general_for_unknown() -> None:
+    specialist = get_specialist("not-a-domain")
+    assert specialist.domain == "general"
 
 
-def test_homelab_specialist_detected() -> None:
-    ranked = rank_specialists("Proxmox LXC backup strategy with docker on my homelab")
-    domains = [profile.domain for profile, _ in ranked]
-    assert "homelab" in domains
+def test_specialist_domain_normalization() -> None:
+    assert normalize_domain("personal-development") == "personal_development"
+    assert get_specialist("personal-development").domain == "personal_development"
 
 
 def test_prompt_file_reload_and_general_prompt_override(tmp_path: Path) -> None:

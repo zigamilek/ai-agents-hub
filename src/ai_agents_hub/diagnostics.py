@@ -50,6 +50,7 @@ def diagnostics_payload(
                 "model": config.memory.curator.model,
                 "min_confidence": config.memory.curator.min_confidence,
             },
+            "routing_classifier_model": config.models.default_chat,
             "journal_vault": str(config.journal.obsidian_vault_path),
             "web_search_enabled": config.tools.web_search,
             "prompts": prompt_config,
