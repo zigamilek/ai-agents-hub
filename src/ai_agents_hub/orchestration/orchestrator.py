@@ -81,11 +81,12 @@ class Orchestrator:
             route_model = requested
             response_model = requested
         else:
+            specialist_config = self.config.specialists.by_domain.get(domain)
             route_model = (
-                self.config.models.specialists.by_domain(domain)
-                if domain != "general"
-                else self.config.models.specialists.general
-            ) or self.config.models.orchestrator
+                specialist_config.model
+                if specialist_config is not None
+                else self.config.models.orchestrator
+            )
             response_model = self.public_model_id
             if requested and requested != self.public_model_id:
                 self.logger.info(

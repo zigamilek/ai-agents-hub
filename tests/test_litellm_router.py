@@ -10,6 +10,7 @@ from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 def _config() -> AppConfig:
     return AppConfig.model_validate(
         {
+            "server": {"api_keys": []},
             "providers": {
                 "openai": {"api_key": "openai-key"},
                 "gemini": {
@@ -19,15 +20,32 @@ def _config() -> AppConfig:
             },
             "models": {
                 "orchestrator": "gpt-5-nano-2025-08-07",
-                "specialists": {
-                    "general": "gpt-4o-mini",
-                    "health": "gpt-4o-mini",
-                    "parenting": "gpt-4o-mini",
-                    "relationships": "gpt-4o-mini",
-                    "homelab": "gemini-2.5-flash",
-                    "personal_development": "gpt-4o-mini",
-                },
                 "fallbacks": [],
+            },
+            "api": {
+                "public_model_id": "ai-agents-hub",
+                "allow_provider_model_passthrough": False,
+            },
+            "specialists": {
+                "prompts_directory": "./system_prompts",
+                "orchestrator_prompt_file": "orchestrator.md",
+                "by_domain": {
+                    "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
+                    "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},
+                    "parenting": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "parenting.md",
+                    },
+                    "relationships": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "relationships.md",
+                    },
+                    "homelab": {"model": "gemini-2.5-flash", "prompt_file": "homelab.md"},
+                    "personal_development": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "personal_development.md",
+                    },
+                },
             },
         }
     )

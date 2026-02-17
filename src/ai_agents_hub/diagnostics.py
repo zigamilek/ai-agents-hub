@@ -30,8 +30,8 @@ def diagnostics_payload(
     prompt_manager: PromptManager | None = None,
 ) -> dict[str, Any]:
     prompt_config: dict[str, Any] = {
-        "directory": str(config.specialists.prompts.directory),
-        "auto_reload": config.specialists.prompts.auto_reload,
+        "directory": str(config.specialists.prompts_directory),
+        "auto_reload": config.specialists.auto_reload,
     }
     if prompt_manager is not None:
         prompt_config["files"] = prompt_manager.resolved_prompt_files()

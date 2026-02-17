@@ -122,7 +122,7 @@ def run_onboarding(
 
     prompts_dir = _prompt_text(
         "System prompts directory",
-        str(config.specialists.prompts.directory),
+        str(config.specialists.prompts_directory),
     )
 
     _write_env_file(
@@ -147,8 +147,7 @@ def run_onboarding(
     raw["providers"]["gemini"]["api_key"] = "${ENV:GEMINI_API_KEY}"
 
     raw.setdefault("specialists", {})
-    raw["specialists"].setdefault("prompts", {})
-    raw["specialists"]["prompts"]["directory"] = prompts_dir
+    raw["specialists"]["prompts_directory"] = prompts_dir
 
     _save_yaml(cfg_path, raw)
 

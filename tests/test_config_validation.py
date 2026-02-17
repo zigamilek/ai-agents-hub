@@ -1,0 +1,76 @@
+from __future__ import annotations
+
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+from pydantic import ValidationError
+
+from ai_agents_hub.config import AppConfig, load_config
+
+
+def _valid_config() -> dict:
+    return {
+        "server": {"host": "0.0.0.0", "port": 8080, "api_keys": ["dev-key"]},
+        "providers": {
+            "openai": {"api_key": "openai-key"},
+            "gemini": {
+                "api_key": "gemini-key",
+                "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+            },
+        },
+        "models": {
+            "orchestrator": "gpt-5-nano-2025-08-07",
+            "fallbacks": ["gemini-2.5-flash"],
+        },
+        "api": {
+            "public_model_id": "ai-agents-hub",
+            "allow_provider_model_passthrough": False,
+        },
+        "specialists": {
+            "prompts_directory": "./system_prompts",
+            "auto_reload": True,
+            "orchestrator_prompt_file": "orchestrator.md",
+            "by_domain": {
+                "general": {"model": "gpt-5.2", "prompt_file": "general.md"},
+                "health": {"model": "gpt-5.2", "prompt_file": "health.md"},
+                "parenting": {"model": "gpt-5.2", "prompt_file": "parenting.md"},
+                "relationships": {"model": "gpt-5.2", "prompt_file": "relationships.md"},
+                "homelab": {"model": "gpt-5.2", "prompt_file": "homelab.md"},
+                "personal_development": {
+                    "model": "gpt-5.2",
+                    "prompt_file": "personal_development.md",
+                },
+            },
+        },
+    }
+
+
+def test_load_config_requires_existing_file(tmp_path: Path) -> None:
+    missing_path = tmp_path / "missing-config.yaml"
+    with pytest.raises(FileNotFoundError):
+        load_config(missing_path)
+
+
+def test_specialists_config_rejects_missing_domain() -> None:
+    payload = deepcopy(_valid_config())
+    payload["specialists"]["by_domain"].pop("health")
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_specialists_config_rejects_extra_domain() -> None:
+    payload = deepcopy(_valid_config())
+    payload["specialists"]["by_domain"]["finance"] = {
+        "model": "gpt-5.2",
+        "prompt_file": "finance.md",
+    }
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_config_forbids_unknown_keys() -> None:
+    payload = deepcopy(_valid_config())
+    payload["models"]["unknown"] = "value"
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)

@@ -7,6 +7,48 @@ from ai_agents_hub.orchestration.specialists import get_specialist, normalize_do
 from ai_agents_hub.prompts.manager import PromptManager
 
 
+def _config(prompt_dir: Path) -> AppConfig:
+    return AppConfig.model_validate(
+        {
+            "server": {"api_keys": []},
+            "providers": {
+                "openai": {"api_key": "test-openai-key"},
+                "gemini": {
+                    "api_key": "test-gemini-key",
+                    "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                },
+            },
+            "models": {"orchestrator": "gpt-5-nano-2025-08-07", "fallbacks": []},
+            "api": {
+                "public_model_id": "ai-agents-hub",
+                "allow_provider_model_passthrough": False,
+            },
+            "specialists": {
+                "prompts_directory": str(prompt_dir),
+                "auto_reload": True,
+                "orchestrator_prompt_file": "orchestrator.md",
+                "by_domain": {
+                    "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
+                    "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},
+                    "parenting": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "parenting.md",
+                    },
+                    "relationships": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "relationships.md",
+                    },
+                    "homelab": {"model": "gemini-2.5-flash", "prompt_file": "homelab.md"},
+                    "personal_development": {
+                        "model": "gpt-4o-mini",
+                        "prompt_file": "personal_development.md",
+                    },
+                },
+            },
+        }
+    )
+
+
 def test_specialist_lookup_returns_general_for_unknown() -> None:
     specialist = get_specialist("not-a-domain")
     assert specialist.domain == "general"
@@ -32,16 +74,7 @@ def test_prompt_file_reload_and_general_prompt_override(tmp_path: Path) -> None:
     for name, content in files.items():
         (prompt_dir / name).write_text(content, encoding="utf-8")
 
-    config = AppConfig.model_validate(
-        {
-            "specialists": {
-                "prompts": {
-                    "directory": str(prompt_dir),
-                    "auto_reload": True,
-                }
-            }
-        }
-    )
+    config = _config(prompt_dir)
     manager = PromptManager(config)
     assert manager.get("general") == "General prompt one"
 

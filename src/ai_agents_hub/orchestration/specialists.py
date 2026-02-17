@@ -1,73 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class SpecialistProfile:
-    domain: str
-    label: str
-    routing_hint: str
-
-
-SPECIALISTS: tuple[SpecialistProfile, ...] = (
-    SpecialistProfile(
-        domain="general",
-        label="General Specialist",
-        routing_hint=(
-            "Use for broad requests, unclear intent, mixed topics, or anything that does not "
-            "clearly belong to another specialist."
-        ),
-    ),
-    SpecialistProfile(
-        domain="health",
-        label="Health Specialist",
-        routing_hint=(
-            "Physical or mental health, symptoms, rehabilitation, fitness, sleep, nutrition, "
-            "recovery, injury, medical-care planning."
-        ),
-    ),
-    SpecialistProfile(
-        domain="parenting",
-        label="Parenting Specialist",
-        routing_hint=(
-            "Parent-child challenges, discipline, routines, school behavior, communication "
-            "with children, age-appropriate parenting guidance."
-        ),
-    ),
-    SpecialistProfile(
-        domain="relationships",
-        label="Relationships Specialist",
-        routing_hint=(
-            "Couple/partner issues, communication conflicts, boundaries, trust, intimacy, "
-            "repairing and maintaining relationships."
-        ),
-    ),
-    SpecialistProfile(
-        domain="homelab",
-        label="Homelab Specialist",
-        routing_hint=(
-            "Homelab infrastructure, Proxmox, LXC, Docker, networking, server setup, backups, "
-            "automation, observability, rollback-safe ops."
-        ),
-    ),
-    SpecialistProfile(
-        domain="personal_development",
-        label="Personal Development Specialist",
-        routing_hint=(
-            "Habits, goals, productivity, planning, accountability, self-improvement, "
-            "learning and personal growth."
-        ),
-    ),
+from ai_agents_hub.specialist_catalog import (
+    SPECIALIST_CATALOG,
+    SPECIALISTS_BY_DOMAIN,
+    SpecialistDefinition,
+    normalize_domain,
 )
 
-SPECIALISTS_BY_DOMAIN: dict[str, SpecialistProfile] = {
-    specialist.domain: specialist for specialist in SPECIALISTS
-}
-
-
-def normalize_domain(domain: str) -> str:
-    return domain.strip().lower().replace("-", "_")
+SpecialistProfile = SpecialistDefinition
+SPECIALISTS: tuple[SpecialistProfile, ...] = SPECIALIST_CATALOG
 
 
 def get_specialist(domain: str) -> SpecialistProfile:

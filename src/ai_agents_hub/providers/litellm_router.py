@@ -14,15 +14,12 @@ class LiteLLMRouter:
         self.logger = get_logger(__name__)
 
     def list_models(self) -> list[str]:
-        specialists = self.config.models.specialists
+        specialist_models = [
+            item.model for item in self.config.specialists.by_domain.values()
+        ]
         candidates = {
             self.config.models.orchestrator,
-            specialists.general,
-            specialists.health,
-            specialists.parenting,
-            specialists.relationships,
-            specialists.homelab,
-            specialists.personal_development,
+            *specialist_models,
             *self.config.models.fallbacks,
         }
         return sorted([model for model in candidates if model])

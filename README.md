@@ -16,6 +16,9 @@ AI Agents Hub is a custom router/orchestrator service that exposes an OpenAI-com
 
 Main config file: `config.yaml`
 
+Startup is strict: the config file must exist and match the schema. Missing files,
+unknown keys, or missing specialist domain entries fail fast at startup.
+
 API keys are referenced from environment variables:
 
 - `${ENV:OPENAI_API_KEY}`
@@ -196,17 +199,28 @@ Config location:
 
 ```yaml
 specialists:
-  prompts:
-    directory: ./system_prompts
-    auto_reload: true
-    files:
-      orchestrator: orchestrator.md
-      general: general.md
-      health: health.md
-      parenting: parenting.md
-      relationships: relationships.md
-      homelab: homelab.md
-      personal_development: personal_development.md
+  prompts_directory: ./system_prompts
+  auto_reload: true
+  orchestrator_prompt_file: orchestrator.md
+  by_domain:
+    general:
+      model: gpt-5.2
+      prompt_file: general.md
+    health:
+      model: gpt-5.2
+      prompt_file: health.md
+    parenting:
+      model: gpt-5.2
+      prompt_file: parenting.md
+    relationships:
+      model: gpt-5.2
+      prompt_file: relationships.md
+    homelab:
+      model: gpt-5.2
+      prompt_file: homelab.md
+    personal_development:
+      model: gpt-5.2
+      prompt_file: personal_development.md
 ```
 
 The master routing orchestrator prompt is:

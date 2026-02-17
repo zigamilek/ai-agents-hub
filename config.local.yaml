@@ -13,13 +13,6 @@ providers:
 
 models:
   orchestrator: gpt-5-nano-2025-08-07
-  specialists:
-    general: gpt-5.2
-    health: gpt-5.2
-    parenting: gpt-5.2
-    relationships: gpt-5.2
-    homelab: gpt-5.2
-    personal_development: gpt-5.2
   fallbacks:
     - gemini-2.5-flash
 
@@ -29,17 +22,28 @@ api:
   allow_provider_model_passthrough: false
 
 specialists:
-  prompts:
-    directory: ./system_prompts
-    auto_reload: true
-    files:
-      orchestrator: orchestrator.md
-      general: general.md
-      health: health.md
-      parenting: parenting.md
-      relationships: relationships.md
-      homelab: homelab.md
-      personal_development: personal_development.md
+  prompts_directory: ./system_prompts
+  auto_reload: true
+  orchestrator_prompt_file: orchestrator.md
+  by_domain:
+    general:
+      model: gpt-5.2
+      prompt_file: general.md
+    health:
+      model: gpt-5.2
+      prompt_file: health.md
+    parenting:
+      model: gpt-5.2
+      prompt_file: parenting.md
+    relationships:
+      model: gpt-5.2
+      prompt_file: relationships.md
+    homelab:
+      model: gpt-5.2
+      prompt_file: homelab.md
+    personal_development:
+      model: gpt-5.2
+      prompt_file: personal_development.md
 
 diagnostics:
   enabled: true

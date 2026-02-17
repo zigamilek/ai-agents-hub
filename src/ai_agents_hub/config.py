@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from ai_agents_hub.specialist_catalog import SPECIALIST_DOMAINS, normalize_domain
+
 try:
     from dotenv import load_dotenv
 except Exception:  # pragma: no cover - optional at runtime
@@ -16,83 +19,103 @@ except Exception:  # pragma: no cover - optional at runtime
 ENV_REF_PATTERN = re.compile(r"^\$\{ENV:([A-Z0-9_]+)\}$")
 
 
-class ServerConfig(BaseModel):
+class StrictConfigModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class ServerConfig(StrictConfigModel):
     host: str = "0.0.0.0"
     port: int = 8080
-    api_keys: list[str | None] = Field(default_factory=list)
+    api_keys: list[str | None] = Field(...)
 
 
-class ProviderConfig(BaseModel):
-    api_key: str | None = None
+class ProviderConfig(StrictConfigModel):
+    api_key: str | None = Field(...)
     base_url: str | None = None
 
 
-class ProvidersConfig(BaseModel):
-    openai: ProviderConfig = Field(default_factory=ProviderConfig)
-    gemini: ProviderConfig = Field(
-        default_factory=lambda: ProviderConfig(
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-        )
-    )
+class ProvidersConfig(StrictConfigModel):
+    openai: ProviderConfig = Field(...)
+    gemini: ProviderConfig = Field(...)
 
 
-class SpecialistModels(BaseModel):
-    general: str = "gpt-4o-mini"
-    health: str = "gpt-4o-mini"
-    parenting: str = "gpt-4o-mini"
-    relationships: str = "gpt-4o-mini"
-    homelab: str = "gemini-2.5-flash"
-    personal_development: str = "gpt-4o-mini"
-
-    def by_domain(self, domain: str) -> str:
-        normalized = domain.strip().lower().replace("-", "_")
-        return getattr(self, normalized, self.general)
-
-
-class ModelsConfig(BaseModel):
-    orchestrator: str = "gpt-5-nano-2025-08-07"
-    specialists: SpecialistModels = Field(default_factory=SpecialistModels)
+class ModelsConfig(StrictConfigModel):
+    orchestrator: str = Field(...)
     fallbacks: list[str] = Field(default_factory=list)
 
-class SpecialistPromptFilesConfig(BaseModel):
-    orchestrator: str = "orchestrator.md"
-    general: str = "general.md"
-    health: str = "health.md"
-    parenting: str = "parenting.md"
-    relationships: str = "relationships.md"
-    homelab: str = "homelab.md"
-    personal_development: str = "personal_development.md"
+
+class SpecialistDomainConfig(StrictConfigModel):
+    model: str = Field(...)
+    prompt_file: str = Field(...)
+
+    @field_validator("model", "prompt_file")
+    @classmethod
+    def _non_empty(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("Value must not be empty.")
+        return trimmed
 
 
-class SpecialistPromptsConfig(BaseModel):
-    directory: Path = Path("/etc/ai-agents-hub/system_prompts")
+class SpecialistsConfig(StrictConfigModel):
+    prompts_directory: Path = Field(...)
     auto_reload: bool = True
-    files: SpecialistPromptFilesConfig = Field(default_factory=SpecialistPromptFilesConfig)
+    orchestrator_prompt_file: str = Field(...)
+    by_domain: dict[str, SpecialistDomainConfig] = Field(...)
+
+    @field_validator("orchestrator_prompt_file")
+    @classmethod
+    def _validate_orchestrator_prompt_file(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("orchestrator_prompt_file must not be empty.")
+        return trimmed
+
+    @field_validator("by_domain")
+    @classmethod
+    def _validate_by_domain(
+        cls, value: dict[str, SpecialistDomainConfig]
+    ) -> dict[str, SpecialistDomainConfig]:
+        normalized: dict[str, SpecialistDomainConfig] = {}
+        for raw_key, config in value.items():
+            key = normalize_domain(raw_key)
+            if key in normalized:
+                raise ValueError(
+                    f"Duplicate specialist domain after normalization: '{raw_key}'."
+                )
+            normalized[key] = config
+
+        required = set(SPECIALIST_DOMAINS)
+        provided = set(normalized)
+        missing = sorted(required - provided)
+        extra = sorted(provided - required)
+        if missing or extra:
+            raise ValueError(
+                "specialists.by_domain keys must match catalog domains. "
+                f"missing={missing} extra={extra}"
+            )
+        return {domain: normalized[domain] for domain in SPECIALIST_DOMAINS}
 
 
-class SpecialistsConfig(BaseModel):
-    prompts: SpecialistPromptsConfig = Field(default_factory=SpecialistPromptsConfig)
-
-
-class DiagnosticEndpointsConfig(BaseModel):
+class DiagnosticEndpointsConfig(StrictConfigModel):
     health: str = "/healthz"
     readiness: str = "/readyz"
     diagnostics: str = "/diagnostics"
 
 
-class DiagnosticsConfig(BaseModel):
+class DiagnosticsConfig(StrictConfigModel):
     enabled: bool = True
     endpoints: DiagnosticEndpointsConfig = Field(
         default_factory=DiagnosticEndpointsConfig
     )
 
 
-class ApiConfig(BaseModel):
-    public_model_id: str = "ai-agents-hub"
+class ApiConfig(StrictConfigModel):
+    public_model_id: str = Field(...)
     allow_provider_model_passthrough: bool = False
 
 
-class LoggingConfig(BaseModel):
+class LoggingConfig(StrictConfigModel):
     level: Literal["ERROR", "WARNING", "INFO", "DEBUG", "TRACE"] = "INFO"
     output: Literal["console", "file", "both"] = "console"
     directory: Path = Path("./data/logs")
@@ -103,12 +126,12 @@ class LoggingConfig(BaseModel):
     include_payloads: bool = False
 
 
-class AppConfig(BaseModel):
-    server: ServerConfig = Field(default_factory=ServerConfig)
-    providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
-    models: ModelsConfig = Field(default_factory=ModelsConfig)
-    api: ApiConfig = Field(default_factory=ApiConfig)
-    specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
+class AppConfig(StrictConfigModel):
+    server: ServerConfig = Field(...)
+    providers: ProvidersConfig = Field(...)
+    models: ModelsConfig = Field(...)
+    api: ApiConfig = Field(...)
+    specialists: SpecialistsConfig = Field(...)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
@@ -146,12 +169,20 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         if config_path
         else Path(os.getenv("AI_AGENTS_HUB_CONFIG", "config.yaml"))
     )
-    raw: dict[str, Any] = {}
-    if path.exists():
-        with path.open("r", encoding="utf-8") as f:
-            loaded = yaml.safe_load(f) or {}
-            if isinstance(loaded, dict):
-                raw = loaded
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Config file not found: {path}. "
+            "Provide AI_AGENTS_HUB_CONFIG or create config.yaml."
+        )
+    with path.open("r", encoding="utf-8") as f:
+        loaded = yaml.safe_load(f)
+    if loaded is None:
+        raise ValueError(f"Config file is empty: {path}")
+    if not isinstance(loaded, dict):
+        raise TypeError(f"Config root must be a YAML mapping/object: {path}")
+
+    raw: dict[str, Any] = loaded
+
     expanded = _expand_env_refs(raw)
     config = AppConfig.model_validate(expanded)
 
@@ -170,11 +201,14 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
             in {"1", "true", "yes", "on"}
         )
     if os.getenv("AI_AGENTS_HUB_PROMPTS_DIR"):
-        config.specialists.prompts.directory = Path(
-            os.getenv("AI_AGENTS_HUB_PROMPTS_DIR", str(config.specialists.prompts.directory))
+        config.specialists.prompts_directory = Path(
+            os.getenv(
+                "AI_AGENTS_HUB_PROMPTS_DIR",
+                str(config.specialists.prompts_directory),
+            )
         )
     if os.getenv("AI_AGENTS_HUB_PROMPTS_AUTO_RELOAD"):
-        config.specialists.prompts.auto_reload = (
+        config.specialists.auto_reload = (
             os.getenv("AI_AGENTS_HUB_PROMPTS_AUTO_RELOAD", "true").lower()
             in {"1", "true", "yes", "on"}
         )

@@ -16,7 +16,7 @@ from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 
 
 def _ensure_runtime_dirs(config: AppConfig) -> None:
-    config.specialists.prompts.directory.mkdir(parents=True, exist_ok=True)
+    config.specialists.prompts_directory.mkdir(parents=True, exist_ok=True)
     if config.logging.output in {"file", "both"}:
         config.logging.directory.mkdir(parents=True, exist_ok=True)
 
@@ -51,7 +51,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     logger.info(
         "Services initialized (orchestrator_model=%s, prompts_dir=%s)",
         config.models.orchestrator,
-        config.specialists.prompts.directory,
+        config.specialists.prompts_directory,
     )
 
     app = FastAPI(title="AI Agents Hub", version="0.1.0")
