@@ -61,30 +61,6 @@ class StubSpecialistRouter:
         )
 
 
-class StubMemoryStore:
-    def undo_memory(self, _memory_id: str) -> bool:
-        return False
-
-    def edit_memory(self, _memory_id: str, _instructions: str) -> bool:
-        return False
-
-
-class StubMemoryCurator:
-    async def maybe_capture(
-        self, *, domain: str, user_text: str, assistant_text: str
-    ) -> None:
-        return None
-
-
-class StubToolRunner:
-    async def maybe_search(self, _user_text: str) -> list[Any]:
-        return []
-
-    @staticmethod
-    def sources_context_block(_sources: list[Any]) -> str:
-        return ""
-
-
 class StubPromptManager:
     def get(self, key: str) -> str:
         prompts = {
@@ -102,8 +78,6 @@ class StubPromptManager:
 def _config() -> AppConfig:
     return AppConfig.model_validate(
         {
-            "memory": {"auto_write": False},
-            "journal": {"enabled": False},
             "models": {
                 "default_chat": "gpt-5-nano-2025-08-07",
                 "routing": {
@@ -140,12 +114,8 @@ def _build_supervisor(
     supervisor = Supervisor(
         config=cfg,
         llm_router=llm_router,  # type: ignore[arg-type]
-        memory_store=StubMemoryStore(),  # type: ignore[arg-type]
-        memory_curator=StubMemoryCurator(),  # type: ignore[arg-type]
         specialist_router=specialist_router,  # type: ignore[arg-type]
-        tool_runner=StubToolRunner(),  # type: ignore[arg-type]
         prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
-        journal_writer=None,
     )
     return supervisor, llm_router, specialist_router
 

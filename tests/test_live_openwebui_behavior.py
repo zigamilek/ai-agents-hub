@@ -11,13 +11,10 @@ import pytest
 
 from ai_agents_hub.api.schemas import ChatCompletionRequest
 from ai_agents_hub.config import AppConfig, load_config
-from ai_agents_hub.memory.curator import MemoryCurator
-from ai_agents_hub.memory.store import MemoryStore
 from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
 from ai_agents_hub.orchestration.supervisor import Supervisor
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
-from ai_agents_hub.tools.runner import ToolRunner
 
 PREFIX_RE = re.compile(r"^Answered by the (?P<label>.+?) specialist\.$")
 
@@ -96,6 +93,19 @@ def _extract_confidence(calls: list[dict[str, Any]]) -> float | None:
     return None
 
 
+def _extract_reason(calls: list[dict[str, Any]]) -> str | None:
+    classifier_calls = [c for c in calls if c["include_fallbacks_requested"] is False]
+    for call in reversed(classifier_calls):
+        text = str(call.get("response_text") or "").strip()
+        if not text:
+            continue
+        payload = _extract_json_payload(text)
+        reason = str(payload.get("reason") or "").strip()
+        if reason:
+            return reason
+    return None
+
+
 class SpyLiteLLMRouter(LiteLLMRouter):
     def __init__(self, config: AppConfig) -> None:
         super().__init__(config)
@@ -158,7 +168,7 @@ def _parse_specialist_from_response(content: str) -> str:
         "(calls external model providers)."
     ),
 )
-def test_live_openwebui_like_routing_flow(tmp_path: Path) -> None:
+def test_live_openwebui_like_routing_flow() -> None:
     cfg = load_config(_resolve_config_path())
 
     default_model = cfg.models.default_chat.lower()
@@ -169,33 +179,20 @@ def test_live_openwebui_like_routing_flow(tmp_path: Path) -> None:
     if needs_gemini and not cfg.providers.gemini.api_key:
         pytest.skip("GEMINI_API_KEY is required for live classifier model.")
 
-    # Keep live probe side-effect free and local-path friendly.
-    cfg.memory.auto_write = False
-    cfg.memory.notify_on_write = False
-    cfg.journal.enabled = False
-    cfg.tools.web_search = False
+    # Keep probe focused on classifier + specialist routing behavior.
     cfg.models.fallbacks = []
-    cfg.memory.root_path = tmp_path / "memories"
-    cfg.journal.obsidian_vault_path = tmp_path / "obsidian"
     cfg.specialists.prompts.directory = Path("prompts/specialists").resolve()
     if not cfg.providers.gemini.api_key:
         cfg.models.routing.homelab = cfg.models.routing.general
 
     llm_router = SpyLiteLLMRouter(cfg)
-    memory_store = MemoryStore(cfg.memory.root_path)
-    memory_curator = MemoryCurator(config=cfg, llm_router=llm_router, memory_store=memory_store)
     specialist_router = SpecialistRouter(config=cfg, llm_router=llm_router)
-    tool_runner = ToolRunner(cfg)
     prompt_manager = PromptManager(cfg)
     supervisor = Supervisor(
         config=cfg,
         llm_router=llm_router,
-        memory_store=memory_store,
-        memory_curator=memory_curator,
         specialist_router=specialist_router,
-        tool_runner=tool_runner,
         prompt_manager=prompt_manager,
-        journal_writer=None,
     )
 
     queries = [
@@ -238,6 +235,7 @@ def test_live_openwebui_like_routing_flow(tmp_path: Path) -> None:
             if call["include_fallbacks_requested"] is True
         ]
         confidence = _extract_confidence(calls)
+        reason = _extract_reason(calls)
 
         print(f"QUERY: {query}")
         print(f"ROUTED SPECIALIST: {routed_specialist}")
@@ -246,6 +244,7 @@ def test_live_openwebui_like_routing_flow(tmp_path: Path) -> None:
             if confidence is not None
             else "ROUTING CONFIDENCE: n/a"
         )
+        print(f"ROUTING REASON: {reason or 'n/a'}")
         print(f"CLASSIFIER MODEL CALLS: {classifier_models}")
         print(f"ANSWER MODEL CALLS: {answer_models}")
         print("---")
