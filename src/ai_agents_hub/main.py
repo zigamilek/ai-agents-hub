@@ -10,7 +10,7 @@ from ai_agents_hub.config import AppConfig, load_config
 from ai_agents_hub.diagnostics import diagnostics_payload, health_payload, readiness_payload
 from ai_agents_hub.logging_setup import configure_logging, get_logger
 from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.orchestration.supervisor import Supervisor
+from ai_agents_hub.orchestration.supervisor import Orchestrator
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 
@@ -26,7 +26,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
     llm_router = LiteLLMRouter(config)
     specialist_router = SpecialistRouter(config=config, llm_router=llm_router)
     prompt_manager = PromptManager(config)
-    supervisor = Supervisor(
+    orchestrator = Orchestrator(
         config=config,
         llm_router=llm_router,
         specialist_router=specialist_router,
@@ -37,7 +37,7 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
         "specialist_router": specialist_router,
         "llm_router": llm_router,
         "prompt_manager": prompt_manager,
-        "supervisor": supervisor,
+        "orchestrator": orchestrator,
     }
 
 
@@ -49,8 +49,8 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
 
     services = _build_services(config)
     logger.info(
-        "Services initialized (routing_classifier=%s, prompts_dir=%s)",
-        config.models.default_chat,
+        "Services initialized (orchestrator_model=%s, prompts_dir=%s)",
+        config.models.orchestrator,
         config.specialists.prompts.directory,
     )
 

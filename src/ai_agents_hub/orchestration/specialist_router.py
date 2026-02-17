@@ -73,7 +73,7 @@ class SpecialistRouter:
 
     @property
     def model(self) -> str:
-        return self.config.models.default_chat
+        return self.config.models.orchestrator
 
     async def classify(self, latest_user_text: str) -> SpecialistRoute:
         user_text = latest_user_text.strip()

@@ -12,8 +12,8 @@ providers:
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
 
 models:
-  default_chat: gpt-5-nano-2025-08-07
-  routing:
+  orchestrator: gpt-5-nano-2025-08-07
+  specialists:
     general: gpt-4o-mini
     health: gpt-4o-mini
     parenting: gpt-4o-mini
@@ -23,8 +23,8 @@ models:
   fallbacks:
     - gemini-2.5-flash
 
-openai_compat:
-  master_model_id: ai-agents-hub
+openai_compatibility:
+  public_model_id: ai-agents-hub
   allow_provider_model_passthrough: false
 
 specialists:

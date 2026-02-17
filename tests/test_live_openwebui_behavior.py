@@ -12,7 +12,7 @@ import pytest
 from ai_agents_hub.api.schemas import ChatCompletionRequest
 from ai_agents_hub.config import AppConfig, load_config
 from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.orchestration.supervisor import Supervisor
+from ai_agents_hub.orchestration.supervisor import Orchestrator
 from ai_agents_hub.prompts.manager import PromptManager
 from ai_agents_hub.providers.litellm_router import LiteLLMRouter
 
@@ -171,7 +171,7 @@ def _parse_specialist_from_response(content: str) -> str:
 def test_live_openwebui_like_routing_flow() -> None:
     cfg = load_config(_resolve_config_path())
 
-    default_model = cfg.models.default_chat.lower()
+    default_model = cfg.models.orchestrator.lower()
     needs_openai = default_model.startswith("gpt") or default_model.startswith("openai/")
     needs_gemini = default_model.startswith("gemini")
     if needs_openai and not cfg.providers.openai.api_key:
@@ -183,12 +183,12 @@ def test_live_openwebui_like_routing_flow() -> None:
     cfg.models.fallbacks = []
     cfg.specialists.prompts.directory = Path("prompts/specialists").resolve()
     if not cfg.providers.gemini.api_key:
-        cfg.models.routing.homelab = cfg.models.routing.general
+        cfg.models.specialists.homelab = cfg.models.specialists.general
 
     llm_router = SpyLiteLLMRouter(cfg)
     specialist_router = SpecialistRouter(config=cfg, llm_router=llm_router)
     prompt_manager = PromptManager(cfg)
-    supervisor = Supervisor(
+    orchestrator = Orchestrator(
         config=cfg,
         llm_router=llm_router,
         specialist_router=specialist_router,
@@ -214,12 +214,12 @@ def test_live_openwebui_like_routing_flow() -> None:
         start_idx = len(llm_router.calls)
         request = ChatCompletionRequest.model_validate(
             {
-                "model": cfg.openai_compat.master_model_id,
+                "model": cfg.openai_compatibility.public_model_id,
                 "messages": [{"role": "user", "content": query}],
                 "stream": False,
             }
         )
-        response = asyncio.run(supervisor.complete_non_stream(request))
+        response = asyncio.run(orchestrator.complete_non_stream(request))
         content = str(response["choices"][0]["message"]["content"] or "").strip()
         routed_specialist = _parse_specialist_from_response(content)
 

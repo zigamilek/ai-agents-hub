@@ -7,7 +7,7 @@ from typing import Any
 from ai_agents_hub.api.schemas import ChatCompletionRequest
 from ai_agents_hub.config import AppConfig
 from ai_agents_hub.orchestration.specialist_router import SpecialistRoute
-from ai_agents_hub.orchestration.supervisor import Supervisor
+from ai_agents_hub.orchestration.supervisor import Orchestrator
 
 
 class StubLLMRouter:
@@ -79,8 +79,8 @@ def _config() -> AppConfig:
     return AppConfig.model_validate(
         {
             "models": {
-                "default_chat": "gpt-5-nano-2025-08-07",
-                "routing": {
+                "orchestrator": "gpt-5-nano-2025-08-07",
+                "specialists": {
                     "general": "gpt-4o-mini",
                     "health": "gpt-4o-mini",
                     "parenting": "gpt-4o-mini",
@@ -103,32 +103,32 @@ def _request(messages: list[dict[str, Any]]) -> ChatCompletionRequest:
     )
 
 
-def _build_supervisor(
+def _build_orchestrator(
     *,
     domain: str,
     answer_text: str = "Specialist answer.",
-) -> tuple[Supervisor, StubLLMRouter, StubSpecialistRouter]:
+) -> tuple[Orchestrator, StubLLMRouter, StubSpecialistRouter]:
     cfg = _config()
     llm_router = StubLLMRouter(answer_text=answer_text)
     specialist_router = StubSpecialistRouter(domain=domain)
-    supervisor = Supervisor(
+    orchestrator = Orchestrator(
         config=cfg,
         llm_router=llm_router,  # type: ignore[arg-type]
         specialist_router=specialist_router,  # type: ignore[arg-type]
         prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
     )
-    return supervisor, llm_router, specialist_router
+    return orchestrator, llm_router, specialist_router
 
 
 def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> None:
-    supervisor, llm_router, _specialist_router = _build_supervisor(
+    orchestrator, llm_router, _specialist_router = _build_orchestrator(
         domain="health",
         answer_text="Do wrist extensor isometrics daily.",
     )
     request = _request(
         [{"role": "user", "content": "Can you help with tennis elbow rehab?"}]
     )
-    response = asyncio.run(supervisor.complete_non_stream(request))
+    response = asyncio.run(orchestrator.complete_non_stream(request))
     content = response["choices"][0]["message"]["content"]
     assert content.startswith("Answered by the health specialist.\n\n")
     assert "Do wrist extensor isometrics daily." in content
@@ -136,12 +136,12 @@ def test_non_general_response_has_specialist_prefix_and_uses_domain_model() -> N
 
 
 def test_general_response_has_no_specialist_prefix() -> None:
-    supervisor, llm_router, _specialist_router = _build_supervisor(
+    orchestrator, llm_router, _specialist_router = _build_orchestrator(
         domain="general",
         answer_text="Let's make a weekly plan.",
     )
     request = _request([{"role": "user", "content": "Help me plan my week."}])
-    response = asyncio.run(supervisor.complete_non_stream(request))
+    response = asyncio.run(orchestrator.complete_non_stream(request))
     content = response["choices"][0]["message"]["content"]
     assert not content.startswith("Answered by the")
     assert content.startswith("Let's make a weekly plan.")
@@ -149,7 +149,7 @@ def test_general_response_has_no_specialist_prefix() -> None:
 
 
 def test_routing_uses_latest_user_message_only() -> None:
-    supervisor, _llm_router, specialist_router = _build_supervisor(
+    orchestrator, _llm_router, specialist_router = _build_orchestrator(
         domain="parenting",
         answer_text="Use calm boundaries and consistency.",
     )
@@ -160,5 +160,5 @@ def test_routing_uses_latest_user_message_only() -> None:
             {"role": "user", "content": "Actually, my son ignores instructions."},
         ]
     )
-    asyncio.run(supervisor.complete_non_stream(request))
+    asyncio.run(orchestrator.complete_non_stream(request))
     assert specialist_router.latest_seen_text == "Actually, my son ignores instructions."

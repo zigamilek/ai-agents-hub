@@ -1,6 +1,6 @@
 # AI Agents Hub
 
-AI Agents Hub is a custom router/supervisor service that exposes an OpenAI-compatible API for Open WebUI and coordinates specialist behavior internally.
+AI Agents Hub is a custom router/orchestrator service that exposes an OpenAI-compatible API for Open WebUI and coordinates specialist behavior internally.
 
 ## MVP Features
 
@@ -35,13 +35,13 @@ For local macOS testing, use `config.local.yaml` so data and logs stay under `./
 
 ### Specialist Routing Model
 
-`models.default_chat` is used as the specialist routing classifier model.
+`models.orchestrator` is used as the specialist routing classifier model.
 
 Default:
 
 ```yaml
 models:
-  default_chat: gpt-5-nano-2025-08-07
+  orchestrator: gpt-5-nano-2025-08-07
 ```
 
 On each turn, the classifier chooses exactly one specialist domain from:
@@ -180,7 +180,7 @@ Point Open WebUI OpenAI connection to:
 
 - Base URL: `http://<ai-agents-hub-host>:8080/v1`
 - API Key: one of `server.api_keys` values
-- Model shown in Open WebUI: `ai-agents-hub` (configurable via `openai_compat.master_model_id`)
+- Model shown in Open WebUI: `ai-agents-hub` (configurable via `openai_compatibility.public_model_id`)
 
 Note: in Open WebUI, use **Admin Settings -> Connections -> OpenAI API** (backend connection).  
 Direct browser-side connection checks can fail with `OpenAI: Network Problem` when browser network path differs.

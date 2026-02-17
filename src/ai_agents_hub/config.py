@@ -36,7 +36,7 @@ class ProvidersConfig(BaseModel):
     )
 
 
-class RoutingModels(BaseModel):
+class SpecialistModels(BaseModel):
     general: str = "gpt-4o-mini"
     health: str = "gpt-4o-mini"
     parenting: str = "gpt-4o-mini"
@@ -50,8 +50,8 @@ class RoutingModels(BaseModel):
 
 
 class ModelsConfig(BaseModel):
-    default_chat: str = "gpt-5-nano-2025-08-07"
-    routing: RoutingModels = Field(default_factory=RoutingModels)
+    orchestrator: str = "gpt-5-nano-2025-08-07"
+    specialists: SpecialistModels = Field(default_factory=SpecialistModels)
     fallbacks: list[str] = Field(default_factory=list)
 
 class SpecialistPromptFilesConfig(BaseModel):
@@ -87,8 +87,8 @@ class DiagnosticsConfig(BaseModel):
     )
 
 
-class OpenAICompatConfig(BaseModel):
-    master_model_id: str = "ai-agents-hub"
+class OpenAICompatibilityConfig(BaseModel):
+    public_model_id: str = "ai-agents-hub"
     allow_provider_model_passthrough: bool = False
 
 
@@ -107,7 +107,9 @@ class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
-    openai_compat: OpenAICompatConfig = Field(default_factory=OpenAICompatConfig)
+    openai_compatibility: OpenAICompatibilityConfig = Field(
+        default_factory=OpenAICompatibilityConfig
+    )
     specialists: SpecialistsConfig = Field(default_factory=SpecialistsConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

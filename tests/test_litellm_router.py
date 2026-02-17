@@ -18,8 +18,8 @@ def _config() -> AppConfig:
                 },
             },
             "models": {
-                "default_chat": "gpt-5-nano-2025-08-07",
-                "routing": {
+                "orchestrator": "gpt-5-nano-2025-08-07",
+                "specialists": {
                     "general": "gpt-4o-mini",
                     "health": "gpt-4o-mini",
                     "parenting": "gpt-4o-mini",

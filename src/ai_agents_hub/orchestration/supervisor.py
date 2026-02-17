@@ -40,7 +40,7 @@ def _chunk_to_dict(chunk: Any) -> dict[str, Any]:
     raise TypeError(f"Unsupported stream chunk type: {type(chunk)}")
 
 
-class Supervisor:
+class Orchestrator:
     def __init__(
         self,
         *,
@@ -54,9 +54,9 @@ class Supervisor:
         self.specialist_router = specialist_router
         self.prompt_manager = prompt_manager
         self.logger = get_logger(__name__)
-        self.public_model_id = self.config.openai_compat.master_model_id
+        self.public_model_id = self.config.openai_compatibility.public_model_id
         self.allow_provider_model_passthrough = (
-            self.config.openai_compat.allow_provider_model_passthrough
+            self.config.openai_compatibility.allow_provider_model_passthrough
         )
         self.provider_model_ids = set(self.llm_router.list_models())
 
@@ -82,14 +82,14 @@ class Supervisor:
             response_model = requested
         else:
             route_model = (
-                self.config.models.routing.by_domain(domain)
+                self.config.models.specialists.by_domain(domain)
                 if domain != "general"
-                else self.config.models.routing.general
-            ) or self.config.models.default_chat
+                else self.config.models.specialists.general
+            ) or self.config.models.orchestrator
             response_model = self.public_model_id
             if requested and requested != self.public_model_id:
                 self.logger.info(
-                    "Requested model '%s' is not exposed; using master model '%s'.",
+                    "Requested model '%s' is not exposed; using public model '%s'.",
                     requested,
                     self.public_model_id,
                 )

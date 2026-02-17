@@ -37,7 +37,7 @@ def create_openai_router() -> APIRouter:
     ) -> ModelListResponse:
         config = request.app.state.services["config"]
         created = int(time.time())
-        cards = [ModelCard(id=config.openai_compat.master_model_id, created=created)]
+        cards = [ModelCard(id=config.openai_compatibility.public_model_id, created=created)]
         logger.debug("Listing %d public model(s).", len(cards))
         return ModelListResponse(data=cards)
 
@@ -47,7 +47,7 @@ def create_openai_router() -> APIRouter:
         request: Request,
         _: None = Depends(_require_api_key),
     ) -> Any:
-        supervisor = request.app.state.services["supervisor"]
+        orchestrator = request.app.state.services["orchestrator"]
         app_config = request.app.state.services["config"]
         logger.info(
             "chat.completions request stream=%s requested_model=%s messages=%d",
@@ -58,9 +58,9 @@ def create_openai_router() -> APIRouter:
         if app_config.logging.include_payloads:
             logger.debug("chat.completions payload: %s", payload.model_dump())
         if payload.stream:
-            stream = supervisor.stream_sse(payload)
+            stream = orchestrator.stream_sse(payload)
             return StreamingResponse(stream, media_type="text/event-stream")
-        response = await supervisor.complete_non_stream(payload)
+        response = await orchestrator.complete_non_stream(payload)
         logger.info("chat.completions completed (non-stream).")
         return JSONResponse(response)
 

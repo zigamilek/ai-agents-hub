@@ -38,10 +38,10 @@ def diagnostics_payload(
 
     return {
         "service": "ai-agents-hub",
-        "public_model": config.openai_compat.master_model_id,
+        "public_model": config.openai_compatibility.public_model_id,
         "models": llm_router.list_models(),
         "config": {
-            "routing_classifier_model": config.models.default_chat,
+            "orchestrator_model": config.models.orchestrator,
             "prompts": prompt_config,
             "logging": {
                 "level": config.logging.level,
