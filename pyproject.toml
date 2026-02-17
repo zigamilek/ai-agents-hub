@@ -35,3 +35,6 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "live: runs live integration tests that call external model providers",
+]
