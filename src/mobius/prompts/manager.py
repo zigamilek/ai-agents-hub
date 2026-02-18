@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.logging_setup import get_logger
-from ai_agents_hub.specialist_catalog import SPECIALIST_DOMAINS
+from mobius.config import AppConfig
+from mobius.logging_setup import get_logger
+from mobius.specialist_catalog import SPECIALIST_DOMAINS
 
 DEFAULT_PROMPTS: dict[str, str] = {
     "orchestrator": (

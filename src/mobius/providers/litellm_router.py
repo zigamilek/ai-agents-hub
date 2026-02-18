@@ -4,8 +4,8 @@ from typing import Any
 
 from litellm import acompletion
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.logging_setup import get_logger
+from mobius.config import AppConfig
+from mobius.logging_setup import get_logger
 
 
 class LiteLLMRouter:

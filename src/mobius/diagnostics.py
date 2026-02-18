@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.prompts.manager import PromptManager
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.config import AppConfig
+from mobius.prompts.manager import PromptManager
+from mobius.providers.litellm_router import LiteLLMRouter
 
 
 def health_payload() -> dict[str, Any]:
@@ -37,7 +37,7 @@ def diagnostics_payload(
         prompt_config["files"] = prompt_manager.resolved_prompt_files()
 
     return {
-        "service": "ai-agents-hub",
+        "service": "mobius",
         "public_model": config.api.public_model_id,
         "models": llm_router.list_models(),
         "config": {

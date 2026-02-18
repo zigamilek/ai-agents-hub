@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ai_agents_hub.config import AppConfig, load_config
+from mobius.config import AppConfig, load_config
 
 
 def _valid_config() -> dict:
@@ -24,7 +24,7 @@ def _valid_config() -> dict:
             "fallbacks": ["gemini-2.5-flash"],
         },
         "api": {
-            "public_model_id": "ai-agents-hub",
+            "public_model_id": "mobius",
             "allow_provider_model_passthrough": False,
         },
         "specialists": {

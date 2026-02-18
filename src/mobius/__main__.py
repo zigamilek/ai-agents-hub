@@ -4,12 +4,12 @@ import argparse
 
 import uvicorn
 
-from ai_agents_hub.config import load_config
-from ai_agents_hub.onboarding import run_onboarding
+from mobius.config import load_config
+from mobius.onboarding import run_onboarding
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="ai-agents-hub")
+    parser = argparse.ArgumentParser(prog="mobius")
     subparsers = parser.add_subparsers(dest="command")
 
     serve_parser = subparsers.add_parser("serve", help="Run API server")
@@ -39,7 +39,7 @@ def main() -> None:
     host = getattr(args, "host", None) or config.server.host
     port = getattr(args, "port", None) or config.server.port
     uvicorn.run(
-        "ai_agents_hub.main:app",
+        "mobius.main:app",
         host=host,
         port=port,
         reload=False,

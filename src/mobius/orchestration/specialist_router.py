@@ -5,10 +5,10 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.logging_setup import get_logger
-from ai_agents_hub.orchestration.specialists import SPECIALISTS, get_specialist, normalize_domain
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.config import AppConfig
+from mobius.logging_setup import get_logger
+from mobius.orchestration.specialists import SPECIALISTS, get_specialist, normalize_domain
+from mobius.providers.litellm_router import LiteLLMRouter
 
 JSON_BLOCK_RE = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```", re.DOTALL | re.IGNORECASE)
 
@@ -89,7 +89,7 @@ class SpecialistRouter:
             f"- {profile.domain}: {profile.routing_hint}" for profile in SPECIALISTS
         )
         system_prompt = (
-            "You are the routing orchestrator for AI Agents Hub.\n"
+            "You are the routing orchestrator for Mobius.\n"
             "Your job: choose exactly ONE specialist for the latest user message.\n"
             "Always respond with ONLY a single JSON object and nothing else.\n"
             "Do not include markdown, code fences, commentary, or extra keys.\n"

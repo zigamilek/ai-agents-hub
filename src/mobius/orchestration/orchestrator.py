@@ -7,13 +7,13 @@ from time import perf_counter
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
-from ai_agents_hub.api.schemas import ChatCompletionRequest, OpenAIMessage, latest_user_text
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.logging_setup import get_logger
-from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.orchestration.specialists import SpecialistProfile, get_specialist
-from ai_agents_hub.prompts.manager import PromptManager
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.api.schemas import ChatCompletionRequest, OpenAIMessage, latest_user_text
+from mobius.config import AppConfig
+from mobius.logging_setup import get_logger
+from mobius.orchestration.specialist_router import SpecialistRouter
+from mobius.orchestration.specialists import SpecialistProfile, get_specialist
+from mobius.prompts.manager import PromptManager
+from mobius.providers.litellm_router import LiteLLMRouter
 
 
 @dataclass

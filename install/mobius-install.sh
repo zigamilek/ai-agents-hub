@@ -4,11 +4,12 @@ color
 verb_ip6
 catch_errors
 
-APP="AI Agents Hub"
-APP_DIR="/opt/ai-agents-hub"
-CONFIG_DIR="/etc/ai-agents-hub"
-SERVICE_NAME="ai-agents-hub"
-REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
+APP="Mobius"
+APP_DIR="/opt/mobius"
+CONFIG_DIR="/etc/mobius"
+SERVICE_NAME="mobius"
+SERVICE_USER="mobius"
+REPO_URL="${REPO_URL:-https://github.com/zigamilek/mobius.git}"
 REPO_REF="${REPO_REF:-master}"
 
 _detect_service_port() {
@@ -78,13 +79,13 @@ $STD apt-get install -y git python3 python3-venv python3-pip rsync ca-certificat
 msg_ok "Installed dependencies"
 
 msg_info "Creating service user"
-if ! id -u aihub >/dev/null 2>&1; then
-  $STD useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin aihub
+if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
+  $STD useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
 fi
 msg_ok "Service user ready"
 
 msg_info "Preparing directories"
-$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/ai-agents-hub
+$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius
 msg_ok "Directories prepared"
 
 msg_info "Cloning repository"
@@ -105,22 +106,21 @@ $STD "${APP_DIR}/.venv/bin/pip" install -e "${APP_DIR}"
 msg_ok "Python environment ready"
 
 msg_info "Installing CLI command symlinks"
-$STD ln -sf "${APP_DIR}/.venv/bin/ai-agents-hub" /usr/local/bin/ai-agents-hub
-$STD ln -sf /usr/local/bin/ai-agents-hub /usr/local/bin/aiagentshub
-msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
+$STD ln -sf "${APP_DIR}/.venv/bin/mobius" /usr/local/bin/mobius
+msg_ok "CLI command available: mobius"
 
 msg_info "Installing configuration"
 if [[ ! -f "${CONFIG_DIR}/config.yaml" ]]; then
   $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
 fi
-if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
-  cat <<'EOF' > "${CONFIG_DIR}/ai-agents-hub.env"
+if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
+  cat <<'EOF' > "${CONFIG_DIR}/mobius.env"
 OPENAI_API_KEY=
 GEMINI_API_KEY=
-AI_AGENTS_HUB_API_KEY=change-me
+MOBIUS_API_KEY=change-me
 EOF
 fi
-$STD chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
+$STD chmod 600 "${CONFIG_DIR}/mobius.env"
 
 for prompt_file in "${APP_DIR}/system_prompts/"*.md; do
   prompt_name="$(basename "${prompt_file}")"
@@ -129,10 +129,10 @@ done
 msg_ok "Configuration installed"
 
 msg_info "Installing systemd service"
-$STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
+$STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
 
 msg_info "Applying ownership"
-$STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
+$STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius
 msg_ok "Ownership applied"
 
 $STD systemctl daemon-reload
@@ -141,4 +141,4 @@ _verify_service_start "${SERVICE_NAME}"
 msg_ok "Service installed and started"
 
 msg_ok "Installation complete"
-msg_ok "Run 'ai-agents-hub onboard' to configure keys and settings."
+msg_ok "Run 'mobius onboard' to configure keys and settings."

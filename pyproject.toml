@@ -3,7 +3,7 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ai-agents-hub"
+name = "mobius"
 version = "0.1.0"
 description = "OpenAI-compatible specialist router/orchestrator."
 readme = "README.md"
@@ -24,7 +24,7 @@ dev = [
 ]
 
 [project.scripts]
-ai-agents-hub = "ai_agents_hub.__main__:main"
+mobius = "mobius.__main__:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

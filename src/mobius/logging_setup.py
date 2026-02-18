@@ -4,7 +4,7 @@ import logging
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
-from ai_agents_hub.config import LoggingConfig
+from mobius.config import LoggingConfig
 
 TRACE_LEVEL_NUM = 5
 

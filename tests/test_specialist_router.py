@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.orchestration.specialist_router import SpecialistRoute, SpecialistRouter
+from mobius.config import AppConfig
+from mobius.orchestration.specialist_router import SpecialistRoute, SpecialistRouter
 
 
 class StubLLMRouter:
@@ -59,7 +59,7 @@ def _config() -> AppConfig:
                 "fallbacks": [],
             },
             "api": {
-                "public_model_id": "ai-agents-hub",
+                "public_model_id": "mobius",
                 "allow_provider_model_passthrough": False,
             },
             "specialists": {

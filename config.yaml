@@ -2,7 +2,7 @@ server:
   host: 0.0.0.0
   port: 8080
   api_keys:
-    - ${ENV:AI_AGENTS_HUB_API_KEY}
+    - ${ENV:MOBIUS_API_KEY}
 
 providers:
   openai:
@@ -18,11 +18,11 @@ models:
 
 # OpenAI-compatible API contract exposed to clients (for example Open WebUI).
 api:
-  public_model_id: ai-agents-hub
+  public_model_id: mobius
   allow_provider_model_passthrough: false
 
 specialists:
-  prompts_directory: /etc/ai-agents-hub/system_prompts
+  prompts_directory: /etc/mobius/system_prompts
   auto_reload: true
   orchestrator_prompt_file: orchestrator.md
   by_domain:
@@ -55,8 +55,8 @@ diagnostics:
 logging:
   level: INFO
   output: both
-  directory: /var/log/ai-agents-hub
-  filename: ai-agents-hub.log
+  directory: /var/log/mobius
+  filename: mobius.log
   daily_rotation: true
   retention_days: 14
   utc: true

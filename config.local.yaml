@@ -18,7 +18,7 @@ models:
 
 # OpenAI-compatible API contract exposed to clients (for example Open WebUI).
 api:
-  public_model_id: ai-agents-hub
+  public_model_id: mobius
   allow_provider_model_passthrough: false
 
 specialists:
@@ -56,7 +56,7 @@ logging:
   level: DEBUG
   output: console
   directory: ./data/logs
-  filename: ai-agents-hub.log
+  filename: mobius.log
   daily_rotation: true
   retention_days: 7
   utc: true

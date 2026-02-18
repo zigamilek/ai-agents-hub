@@ -6,8 +6,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from ai_agents_hub.api.schemas import ChatCompletionRequest, ModelCard, ModelListResponse
-from ai_agents_hub.logging_setup import get_logger
+from mobius.api.schemas import ChatCompletionRequest, ModelCard, ModelListResponse
+from mobius.logging_setup import get_logger
 
 logger = get_logger(__name__)
 

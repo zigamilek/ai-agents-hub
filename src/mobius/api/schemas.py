@@ -47,7 +47,7 @@ class ModelCard(BaseModel):
     id: str
     object: str = "model"
     created: int
-    owned_by: str = "ai-agents-hub"
+    owned_by: str = "mobius"
 
 
 class ModelListResponse(BaseModel):

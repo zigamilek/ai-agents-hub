@@ -9,18 +9,18 @@ from typing import Any
 
 import pytest
 
-from ai_agents_hub.api.schemas import ChatCompletionRequest
-from ai_agents_hub.config import AppConfig, load_config
-from ai_agents_hub.orchestration.orchestrator import Orchestrator
-from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.prompts.manager import PromptManager
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.api.schemas import ChatCompletionRequest
+from mobius.config import AppConfig, load_config
+from mobius.orchestration.orchestrator import Orchestrator
+from mobius.orchestration.specialist_router import SpecialistRouter
+from mobius.prompts.manager import PromptManager
+from mobius.providers.litellm_router import LiteLLMRouter
 
 PREFIX_RE = re.compile(r"^\*Answered by the (?P<label>.+?) specialist\.\*$")
 
 
 def _live_enabled() -> bool:
-    return os.getenv("AI_AGENTS_HUB_LIVE_TESTS", "").strip().lower() in {
+    return os.getenv("MOBIUS_LIVE_TESTS", "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -29,7 +29,7 @@ def _live_enabled() -> bool:
 
 
 def _resolve_config_path() -> Path:
-    env_path = os.getenv("AI_AGENTS_HUB_CONFIG", "").strip()
+    env_path = os.getenv("MOBIUS_CONFIG", "").strip()
     if env_path:
         return Path(env_path)
     local = Path("config.local.yaml")
@@ -164,7 +164,7 @@ def _parse_specialist_from_response(content: str) -> str:
 @pytest.mark.skipif(
     not _live_enabled(),
     reason=(
-        "Set AI_AGENTS_HUB_LIVE_TESTS=1 to run live routing behavior tests "
+        "Set MOBIUS_LIVE_TESTS=1 to run live routing behavior tests "
         "(calls external model providers)."
     ),
 )

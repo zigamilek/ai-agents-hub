@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ai_agents_hub.specialist_catalog import (
+from mobius.specialist_catalog import (
     SPECIALIST_CATALOG,
     SPECIALISTS_BY_DOMAIN,
     SpecialistDefinition,

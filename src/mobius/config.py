@@ -8,7 +8,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ai_agents_hub.specialist_catalog import SPECIALIST_DOMAINS, normalize_domain
+from mobius.specialist_catalog import SPECIALIST_DOMAINS, normalize_domain
 
 try:
     from dotenv import load_dotenv
@@ -119,7 +119,7 @@ class LoggingConfig(StrictConfigModel):
     level: Literal["ERROR", "WARNING", "INFO", "DEBUG", "TRACE"] = "INFO"
     output: Literal["console", "file", "both"] = "console"
     directory: Path = Path("./data/logs")
-    filename: str = "ai-agents-hub.log"
+    filename: str = "mobius.log"
     daily_rotation: bool = True
     retention_days: int = 14
     utc: bool = True
@@ -149,7 +149,7 @@ def _expand_env_refs(value: Any) -> Any:
 
 
 def _maybe_load_dotenv() -> None:
-    disabled = os.getenv("AI_AGENTS_HUB_DISABLE_DOTENV", "").strip().lower() in {
+    disabled = os.getenv("MOBIUS_DISABLE_DOTENV", "").strip().lower() in {
         "1",
         "true",
         "yes",
@@ -157,7 +157,7 @@ def _maybe_load_dotenv() -> None:
     }
     if disabled or load_dotenv is None:
         return
-    dotenv_path = Path(os.getenv("AI_AGENTS_HUB_DOTENV_PATH", ".env"))
+    dotenv_path = Path(os.getenv("MOBIUS_DOTENV_PATH", ".env"))
     if dotenv_path.exists():
         load_dotenv(dotenv_path=dotenv_path, override=False)
 
@@ -167,12 +167,12 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     path = (
         Path(config_path)
         if config_path
-        else Path(os.getenv("AI_AGENTS_HUB_CONFIG", "config.yaml"))
+        else Path(os.getenv("MOBIUS_CONFIG", "config.yaml"))
     )
     if not path.exists():
         raise FileNotFoundError(
             f"Config file not found: {path}. "
-            "Provide AI_AGENTS_HUB_CONFIG or create config.yaml."
+            "Provide MOBIUS_CONFIG or create config.yaml."
         )
     with path.open("r", encoding="utf-8") as f:
         loaded = yaml.safe_load(f)
@@ -187,29 +187,29 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     config = AppConfig.model_validate(expanded)
 
     # Optional runtime overrides for quick debugging without editing YAML.
-    if os.getenv("AI_AGENTS_HUB_LOG_LEVEL"):
-        config.logging.level = os.getenv("AI_AGENTS_HUB_LOG_LEVEL", config.logging.level)  # type: ignore[assignment]
-    if os.getenv("AI_AGENTS_HUB_LOG_OUTPUT"):
-        config.logging.output = os.getenv("AI_AGENTS_HUB_LOG_OUTPUT", config.logging.output)  # type: ignore[assignment]
-    if os.getenv("AI_AGENTS_HUB_LOG_DIR"):
+    if os.getenv("MOBIUS_LOG_LEVEL"):
+        config.logging.level = os.getenv("MOBIUS_LOG_LEVEL", config.logging.level)  # type: ignore[assignment]
+    if os.getenv("MOBIUS_LOG_OUTPUT"):
+        config.logging.output = os.getenv("MOBIUS_LOG_OUTPUT", config.logging.output)  # type: ignore[assignment]
+    if os.getenv("MOBIUS_LOG_DIR"):
         config.logging.directory = Path(
-            os.getenv("AI_AGENTS_HUB_LOG_DIR", str(config.logging.directory))
+            os.getenv("MOBIUS_LOG_DIR", str(config.logging.directory))
         )
-    if os.getenv("AI_AGENTS_HUB_LOG_INCLUDE_PAYLOADS"):
+    if os.getenv("MOBIUS_LOG_INCLUDE_PAYLOADS"):
         config.logging.include_payloads = (
-            os.getenv("AI_AGENTS_HUB_LOG_INCLUDE_PAYLOADS", "false").lower()
+            os.getenv("MOBIUS_LOG_INCLUDE_PAYLOADS", "false").lower()
             in {"1", "true", "yes", "on"}
         )
-    if os.getenv("AI_AGENTS_HUB_PROMPTS_DIR"):
+    if os.getenv("MOBIUS_PROMPTS_DIR"):
         config.specialists.prompts_directory = Path(
             os.getenv(
-                "AI_AGENTS_HUB_PROMPTS_DIR",
+                "MOBIUS_PROMPTS_DIR",
                 str(config.specialists.prompts_directory),
             )
         )
-    if os.getenv("AI_AGENTS_HUB_PROMPTS_AUTO_RELOAD"):
+    if os.getenv("MOBIUS_PROMPTS_AUTO_RELOAD"):
         config.specialists.auto_reload = (
-            os.getenv("AI_AGENTS_HUB_PROMPTS_AUTO_RELOAD", "true").lower()
+            os.getenv("MOBIUS_PROMPTS_AUTO_RELOAD", "true").lower()
             in {"1", "true", "yes", "on"}
         )
 

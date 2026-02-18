@@ -1,12 +1,12 @@
 # Runtime Layout
 
-AI Agents Hub uses persistent paths so the service survives restarts.
+Mobius uses persistent paths so the service survives restarts.
 
-- App code: `/opt/ai-agents-hub`
-- Config: `/etc/ai-agents-hub/config.yaml`
-- Environment file: `/etc/ai-agents-hub/ai-agents-hub.env`
-- Logs: `/var/log/ai-agents-hub`
-- System prompts: `/etc/ai-agents-hub/system_prompts/*.md`
+- App code: `/opt/mobius`
+- Config: `/etc/mobius/config.yaml`
+- Environment file: `/etc/mobius/mobius.env`
+- Logs: `/var/log/mobius`
+- System prompts: `/etc/mobius/system_prompts/*.md`
 
 ## Diagnostics
 

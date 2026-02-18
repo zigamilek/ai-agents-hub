@@ -4,10 +4,10 @@ import asyncio
 from dataclasses import dataclass
 from typing import Any
 
-from ai_agents_hub.api.schemas import ChatCompletionRequest
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.orchestration.orchestrator import Orchestrator
-from ai_agents_hub.orchestration.specialist_router import SpecialistRoute
+from mobius.api.schemas import ChatCompletionRequest
+from mobius.config import AppConfig
+from mobius.orchestration.orchestrator import Orchestrator
+from mobius.orchestration.specialist_router import SpecialistRoute
 
 
 class StubLLMRouter:
@@ -91,7 +91,7 @@ def _config() -> AppConfig:
                 "fallbacks": [],
             },
             "api": {
-                "public_model_id": "ai-agents-hub",
+                "public_model_id": "mobius",
                 "allow_provider_model_passthrough": False,
             },
             "specialists": {
@@ -122,7 +122,7 @@ def _config() -> AppConfig:
 def _request(messages: list[dict[str, Any]]) -> ChatCompletionRequest:
     return ChatCompletionRequest.model_validate(
         {
-            "model": "ai-agents-hub",
+            "model": "mobius",
             "messages": messages,
             "stream": False,
         }

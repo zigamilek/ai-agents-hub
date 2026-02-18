@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.prompts.manager import DEFAULT_PROMPTS, PromptManager
+from mobius.config import AppConfig
+from mobius.prompts.manager import DEFAULT_PROMPTS, PromptManager
 
 
 def _config(prompt_dir: Path) -> AppConfig:
@@ -19,7 +19,7 @@ def _config(prompt_dir: Path) -> AppConfig:
             },
             "models": {"orchestrator": "gpt-5-nano-2025-08-07", "fallbacks": []},
             "api": {
-                "public_model_id": "ai-agents-hub",
+                "public_model_id": "mobius",
                 "allow_provider_model_passthrough": False,
             },
             "specialists": {

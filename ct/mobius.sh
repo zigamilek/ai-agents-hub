@@ -4,10 +4,10 @@ source <(curl -fsSL https://raw.githubusercontent.com/community-scripts/ProxmoxV
 # Author: community-scripts contributors
 # Maintainer: zigamilek
 # License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-# Source: https://github.com/zigamilek/ai-agents-hub
+# Source: https://github.com/zigamilek/mobius
 
-APP="AI Agents Hub"
-var_tags="${var_tags:-ai;agents;llm}"
+APP="Mobius"
+var_tags="${var_tags:-mobius;agents;llm}"
 var_cpu="${var_cpu:-2}"
 var_ram="${var_ram:-4096}"
 var_disk="${var_disk:-8}"
@@ -15,10 +15,10 @@ var_os="${var_os:-debian}"
 var_version="${var_version:-12}"
 var_unprivileged="${var_unprivileged:-1}"
 var_gpu="${var_gpu:-no}"
-AIHUB_REPO_URL="${REPO_URL:-https://github.com/zigamilek/ai-agents-hub.git}"
-AIHUB_REPO_REF="${REPO_REF:-master}"
-AIHUB_RAW_REPO_PATH="${RAW_REPO_PATH:-zigamilek/ai-agents-hub}"
-AIHUB_INSTALLER_URL="https://raw.githubusercontent.com/${AIHUB_RAW_REPO_PATH}/${AIHUB_REPO_REF}/install/aiagentshub-install.sh"
+MOBIUS_REPO_URL="${REPO_URL:-https://github.com/zigamilek/mobius.git}"
+MOBIUS_REPO_REF="${REPO_REF:-master}"
+MOBIUS_RAW_REPO_PATH="${RAW_REPO_PATH:-zigamilek/mobius}"
+MOBIUS_INSTALLER_URL="https://raw.githubusercontent.com/${MOBIUS_RAW_REPO_PATH}/${MOBIUS_REPO_REF}/install/mobius-install.sh"
 
 header_info "$APP"
 variables
@@ -33,14 +33,14 @@ curl() {
   local replaced=0
   for arg in "$@"; do
     if [[ "$arg" == "$target" ]]; then
-      args+=("$AIHUB_INSTALLER_URL")
+      args+=("$MOBIUS_INSTALLER_URL")
       replaced=1
     else
       args+=("$arg")
     fi
   done
   if [[ "$replaced" -eq 1 ]]; then
-    msg_info "Using project installer: ${AIHUB_INSTALLER_URL}"
+    msg_info "Using project installer: ${MOBIUS_INSTALLER_URL}"
   fi
   command curl "${args[@]}"
 }
@@ -54,11 +54,12 @@ function update_script() {
     msg_info "Verbose mode enabled: showing command output (xtrace disabled)."
   fi
 
-  local APP_DIR="/opt/ai-agents-hub"
-  local CONFIG_DIR="/etc/ai-agents-hub"
-  local SERVICE_NAME="ai-agents-hub"
-  local REPO_URL="${REPO_URL:-$AIHUB_REPO_URL}"
-  local REPO_REF="${REPO_REF:-$AIHUB_REPO_REF}"
+  local APP_DIR="/opt/mobius"
+  local CONFIG_DIR="/etc/mobius"
+  local SERVICE_NAME="mobius"
+  local SERVICE_USER="mobius"
+  local REPO_URL="${REPO_URL:-$MOBIUS_REPO_URL}"
+  local REPO_REF="${REPO_REF:-$MOBIUS_REPO_REF}"
   local GIT_SAFE_ARGS=(-c "safe.directory=${APP_DIR}")
 
   detect_service_port() {
@@ -125,8 +126,8 @@ function update_script() {
   msg_ok "Dependencies installed"
 
   msg_info "Ensuring service user exists"
-  if ! id -u aihub >/dev/null 2>&1; then
-    useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin aihub
+  if ! id -u "${SERVICE_USER}" >/dev/null 2>&1; then
+    useradd --system --home "${APP_DIR}" --shell /usr/sbin/nologin "${SERVICE_USER}"
   fi
   msg_ok "Service user ready"
 
@@ -158,27 +159,26 @@ function update_script() {
   msg_ok "Python environment ready"
 
   msg_info "Installing CLI command symlinks"
-  $STD ln -sf "${APP_DIR}/.venv/bin/ai-agents-hub" /usr/local/bin/ai-agents-hub
-  $STD ln -sf /usr/local/bin/ai-agents-hub /usr/local/bin/aiagentshub
-  msg_ok "CLI commands available: ai-agents-hub, aiagentshub"
+  $STD ln -sf "${APP_DIR}/.venv/bin/mobius" /usr/local/bin/mobius
+  msg_ok "CLI command available: mobius"
 
   msg_info "Refreshing runtime files"
-  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/ai-agents-hub
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
-  if [[ ! -f "${CONFIG_DIR}/ai-agents-hub.env" ]]; then
-    cat <<'EOF' > "${CONFIG_DIR}/ai-agents-hub.env"
+  if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
+    cat <<'EOF' > "${CONFIG_DIR}/mobius.env"
 OPENAI_API_KEY=
 GEMINI_API_KEY=
-AI_AGENTS_HUB_API_KEY=change-me
+MOBIUS_API_KEY=change-me
 EOF
   fi
-  $STD chmod 600 "${CONFIG_DIR}/ai-agents-hub.env"
+  $STD chmod 600 "${CONFIG_DIR}/mobius.env"
   for prompt_file in "${APP_DIR}/system_prompts/"*.md; do
     prompt_name="$(basename "${prompt_file}")"
     [[ -f "${CONFIG_DIR}/system_prompts/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/system_prompts/${prompt_name}"
   done
-  $STD cp "${APP_DIR}/deploy/systemd/ai-agents-hub.service" "/etc/systemd/system/${SERVICE_NAME}.service"
-  $STD chown -R aihub:aihub "${APP_DIR}" "${CONFIG_DIR}" /var/log/ai-agents-hub
+  $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
+  $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius
   msg_ok "Runtime files refreshed"
 
   msg_info "Restarting ${SERVICE_NAME}"
@@ -187,7 +187,7 @@ EOF
   verify_service_start "${SERVICE_NAME}"
   msg_ok "Updated successfully"
 
-  msg_ok "Use 'ai-agents-hub onboard' to update env/config interactively."
+  msg_ok "Use 'mobius onboard' to update env/config interactively."
   exit
 }
 

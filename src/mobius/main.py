@@ -5,14 +5,14 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from ai_agents_hub.api.openai_compatible_api import create_openai_router
-from ai_agents_hub.config import AppConfig, load_config
-from ai_agents_hub.diagnostics import diagnostics_payload, health_payload, readiness_payload
-from ai_agents_hub.logging_setup import configure_logging, get_logger
-from ai_agents_hub.orchestration.orchestrator import Orchestrator
-from ai_agents_hub.orchestration.specialist_router import SpecialistRouter
-from ai_agents_hub.prompts.manager import PromptManager
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.api.openai_compatible_api import create_openai_router
+from mobius.config import AppConfig, load_config
+from mobius.diagnostics import diagnostics_payload, health_payload, readiness_payload
+from mobius.logging_setup import configure_logging, get_logger
+from mobius.orchestration.orchestrator import Orchestrator
+from mobius.orchestration.specialist_router import SpecialistRouter
+from mobius.prompts.manager import PromptManager
+from mobius.providers.litellm_router import LiteLLMRouter
 
 
 def _ensure_runtime_dirs(config: AppConfig) -> None:
@@ -45,7 +45,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
     config = load_config(config_path)
     configure_logging(config.logging)
     logger = get_logger(__name__)
-    logger.info("Initializing AI Agents Hub app...")
+    logger.info("Initializing Mobius app...")
 
     services = _build_services(config)
     logger.info(
@@ -54,7 +54,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         config.specialists.prompts_directory,
     )
 
-    app = FastAPI(title="AI Agents Hub", version="0.1.0")
+    app = FastAPI(title="Mobius", version="0.1.0")
     app.state.services = services
     app.include_router(create_openai_router())
 

@@ -1,0 +1,19 @@
+[Unit]
+Description=Mobius
+After=network.target
+
+[Service]
+Type=simple
+User=mobius
+Group=mobius
+WorkingDirectory=/opt/mobius
+EnvironmentFile=-/etc/mobius/mobius.env
+Environment=MOBIUS_CONFIG=/etc/mobius/config.yaml
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/mobius/.venv/bin/mobius serve --config /etc/mobius/config.yaml
+Restart=always
+RestartSec=3
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

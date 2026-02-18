@@ -1,20 +1,24 @@
 from __future__ import annotations
 
+import os
+
 from fastapi.testclient import TestClient
 
-from ai_agents_hub.main import create_app
+os.environ.setdefault("MOBIUS_CONFIG", "config.local.yaml")
+
+from mobius.main import create_app
 
 
 def test_models_endpoint_returns_list() -> None:
     app = create_app()
     client = TestClient(app)
-    response = client.get("/v1/models")
+    response = client.get("/v1/models", headers={"Authorization": "Bearer dev-local-key"})
     assert response.status_code == 200
     payload = response.json()
     assert payload["object"] == "list"
     assert isinstance(payload["data"], list)
     assert len(payload["data"]) == 1
-    assert payload["data"][0]["id"] == "ai-agents-hub"
+    assert payload["data"][0]["id"] == "mobius"
 
 
 def test_diagnostics_endpoints_are_available() -> None:

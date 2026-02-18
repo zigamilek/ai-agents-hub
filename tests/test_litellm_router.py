@@ -3,8 +3,8 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from ai_agents_hub.config import AppConfig
-from ai_agents_hub.providers.litellm_router import LiteLLMRouter
+from mobius.config import AppConfig
+from mobius.providers.litellm_router import LiteLLMRouter
 
 
 def _config() -> AppConfig:
@@ -23,7 +23,7 @@ def _config() -> AppConfig:
                 "fallbacks": [],
             },
             "api": {
-                "public_model_id": "ai-agents-hub",
+                "public_model_id": "mobius",
                 "allow_provider_model_passthrough": False,
             },
             "specialists": {
@@ -80,7 +80,7 @@ def test_chat_completion_uses_rewritten_model(monkeypatch: Any) -> None:
         seen.update(kwargs)
         return {"choices": [{"message": {"content": "ok"}}]}
 
-    monkeypatch.setattr("ai_agents_hub.providers.litellm_router.acompletion", fake_acompletion)
+    monkeypatch.setattr("mobius.providers.litellm_router.acompletion", fake_acompletion)
 
     used_model, response = asyncio.run(
         router.chat_completion(
