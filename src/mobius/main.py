@@ -5,6 +5,7 @@ from typing import Any
 
 from fastapi import FastAPI
 
+from mobius import __version__
 from mobius.api.openai_compatible_api import create_openai_router
 from mobius.config import AppConfig, load_config
 from mobius.diagnostics import diagnostics_payload, health_payload, readiness_payload
@@ -71,7 +72,7 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
         services["state_pipeline"].enabled,
     )
 
-    app = FastAPI(title="Mobius", version="0.1.0")
+    app = FastAPI(title="Mobius", version=__version__)
     app.state.services = services
     app.include_router(create_openai_router())
 
