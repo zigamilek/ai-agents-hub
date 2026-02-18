@@ -117,6 +117,44 @@ function update_script() {
     return 1
   }
 
+  config_requires_state_dsn_bootstrap() {
+    local config_file="${CONFIG_DIR}/config.yaml"
+    local env_file="${CONFIG_DIR}/mobius.env"
+
+    "${APP_DIR}/.venv/bin/python" - "${config_file}" "${env_file}" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+env_path = Path(sys.argv[2])
+
+if env_path.exists():
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ[key.strip()] = value.strip()
+
+try:
+    from mobius.config import load_config
+except Exception:
+    raise SystemExit(1)
+
+try:
+    load_config(config_path)
+except Exception as exc:
+    if "state.database.dsn must be set when state.enabled is true." in str(exc):
+        raise SystemExit(10)
+    raise SystemExit(1)
+
+raise SystemExit(0)
+PY
+    local rc=$?
+    [[ "${rc}" -eq 10 ]]
+  }
+
   msg_info "Stopping ${SERVICE_NAME} service"
   $STD systemctl stop "${SERVICE_NAME}" 2>/dev/null || true
   msg_ok "Stopped ${SERVICE_NAME} service"
@@ -198,6 +236,18 @@ EOF
       msg_info "Skipping DB bootstrap on update (MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=${BOOTSTRAP_ON_UPDATE})"
       ;;
   esac
+
+  if config_requires_state_dsn_bootstrap; then
+    msg_warn "Detected state.enabled=true without MOBIUS_STATE_DSN after update prep"
+    msg_warn "Running local PostgreSQL bootstrap automatically to keep service healthy"
+    if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
+      msg_ok "Local PostgreSQL bootstrap completed"
+    else
+      msg_error "Automatic DB bootstrap failed while state requires a DSN."
+      msg_error "Run 'mobius db bootstrap-local --yes' and retry update."
+      return 1
+    fi
+  fi
 
   msg_info "Restarting ${SERVICE_NAME}"
   $STD systemctl daemon-reload

@@ -21,6 +21,9 @@ SERVICE_NAME = "mobius"
 DEFAULT_REPO_URL = "https://github.com/zigamilek/mobius.git"
 DEFAULT_RAW_REPO_PATH = "zigamilek/mobius"
 DEFAULT_REPO_REF = "master"
+PGDG_KEY_URL = "https://www.postgresql.org/media/keys/ACCC4CF8.asc"
+PGDG_KEYRING_PATH = Path("/usr/share/keyrings/postgresql.gpg")
+PGDG_SOURCES_LIST_PATH = Path("/etc/apt/sources.list.d/pgdg.list")
 GITHUB_HTTPS_RE = re.compile(
     r"^https://github\.com/(?P<path>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?$"
 )
@@ -132,6 +135,64 @@ def _state_dsn(*, db_user: str, db_password: str, db_host: str, db_port: int, db
     return (
         f"postgresql://{db_user}:{quoted_password}@{db_host}:{db_port}/{db_name}"
     )
+
+
+def _linux_codename() -> str | None:
+    os_release = Path("/etc/os-release")
+    if not os_release.exists():
+        return None
+    try:
+        lines = os_release.read_text(encoding="utf-8").splitlines()
+    except Exception:
+        return None
+    values: dict[str, str] = {}
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip('"').strip("'")
+    codename = values.get("VERSION_CODENAME") or values.get("UBUNTU_CODENAME")
+    if not codename:
+        return None
+    cleaned = codename.strip().lower()
+    return cleaned or None
+
+
+def _install_first_available_package(packages: list[str]) -> tuple[bool, str | None]:
+    for package in packages:
+        show_rc, _stdout, _stderr = _run_capture(["apt-cache", "show", package])
+        if show_rc != 0:
+            continue
+        _run_or_fail(
+            ["apt-get", "install", "-y", package],
+            label=f"package install ({package})",
+        )
+        return True, package
+    return False, None
+
+
+def _ensure_pgdg_repo(codename: str) -> None:
+    _run_or_fail(
+        ["apt-get", "install", "-y", "ca-certificates", "curl", "gnupg"],
+        label="pgdg repository prerequisites",
+    )
+    _run_or_fail(
+        [
+            "bash",
+            "-lc",
+            f"rm -f {shlex.quote(str(PGDG_KEYRING_PATH))} && "
+            f"curl -fsSL {shlex.quote(PGDG_KEY_URL)} | gpg --dearmor > {shlex.quote(str(PGDG_KEYRING_PATH))}",
+        ],
+        label="pgdg repository key import",
+    )
+    PGDG_KEYRING_PATH.chmod(0o644)
+    repo_line = (
+        f"deb [signed-by={PGDG_KEYRING_PATH}] "
+        f"https://apt.postgresql.org/pub/repos/apt {codename}-pgdg main\n"
+    )
+    PGDG_SOURCES_LIST_PATH.write_text(repo_line, encoding="utf-8")
+    _run_or_fail(["apt-get", "update"], label="apt index refresh (pgdg)")
 
 
 def _load_env_lines(path: Path) -> list[str]:
@@ -285,22 +346,27 @@ def _cmd_db_bootstrap_local(args: argparse.Namespace) -> int:
         if major:
             pgvector_candidates.append(f"postgresql-{major}-pgvector")
         pgvector_candidates.append("postgresql-pgvector")
-        pgvector_installed = False
-        for package in pgvector_candidates:
-            show_rc, _stdout, _stderr = _run_capture(["apt-cache", "show", package])
-            if show_rc != 0:
-                continue
-            _run_or_fail(
-                ["apt-get", "install", "-y", package],
-                label=f"pgvector package install ({package})",
-            )
-            pgvector_installed = True
-            break
+        pgvector_installed, installed_pkg = _install_first_available_package(
+            pgvector_candidates
+        )
         if not pgvector_installed:
-            print(
-                "Warning: Could not auto-install a pgvector package; "
-                "will still attempt CREATE EXTENSION vector."
+            codename = _linux_codename()
+            if codename:
+                print(
+                    "No pgvector package found in default repositories; "
+                    f"trying PostgreSQL APT repository ({codename}-pgdg)."
+                )
+                _ensure_pgdg_repo(codename)
+                pgvector_installed, installed_pkg = _install_first_available_package(
+                    pgvector_candidates
+                )
+        if not pgvector_installed:
+            raise RuntimeError(
+                "Could not install a pgvector package for this system. "
+                "Install pgvector manually, then rerun 'mobius db bootstrap-local'."
             )
+        if installed_pkg:
+            print(f"Installed pgvector package: {installed_pkg}")
 
         quoted_user_ident = _sql_quote_ident(db_user)
         quoted_name_ident = _sql_quote_ident(db_name)

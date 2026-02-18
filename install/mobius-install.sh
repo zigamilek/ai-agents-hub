@@ -143,6 +143,44 @@ _should_bootstrap_local_db() {
   esac
 }
 
+_config_requires_state_dsn_bootstrap() {
+  local config_file="${CONFIG_DIR}/config.yaml"
+  local env_file="${CONFIG_DIR}/mobius.env"
+
+  "${APP_DIR}/.venv/bin/python" - "${config_file}" "${env_file}" <<'PY'
+import os
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+env_path = Path(sys.argv[2])
+
+if env_path.exists():
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ[key.strip()] = value.strip()
+
+try:
+    from mobius.config import load_config
+except Exception:
+    raise SystemExit(1)
+
+try:
+    load_config(config_path)
+except Exception as exc:
+    if "state.database.dsn must be set when state.enabled is true." in str(exc):
+        raise SystemExit(10)
+    raise SystemExit(1)
+
+raise SystemExit(0)
+PY
+  local rc=$?
+  [[ "${rc}" -eq 10 ]]
+}
+
 if _should_bootstrap_local_db; then
   msg_info "Bootstrapping local PostgreSQL for state features"
   if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
@@ -153,6 +191,18 @@ if _should_bootstrap_local_db; then
   fi
 else
   msg_info "Skipping local PostgreSQL bootstrap (MOBIUS_BOOTSTRAP_LOCAL_DB=${BOOTSTRAP_LOCAL_DB})"
+fi
+
+if _config_requires_state_dsn_bootstrap; then
+  msg_warn "Detected state.enabled=true without MOBIUS_STATE_DSN after install prep"
+  msg_warn "Running local PostgreSQL bootstrap automatically to keep service healthy"
+  if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
+    msg_ok "Local PostgreSQL bootstrap completed"
+  else
+    msg_error "Automatic DB bootstrap failed while state requires a DSN."
+    msg_error "Run 'mobius db bootstrap-local --yes' and retry installation."
+    return 1
+  fi
 fi
 
 msg_info "Applying ownership"

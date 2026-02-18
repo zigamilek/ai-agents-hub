@@ -315,6 +315,10 @@ If you want update-time DB bootstrap as well, run:
 MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=yes mobius update
 ```
 
+Note: even when `MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=no`, the updater now
+auto-runs local DB bootstrap if your config has `state.enabled: true` but
+`MOBIUS_STATE_DSN` is missing, so the service does not restart into a crash loop.
+
 Equivalent one-liner:
 
 ```bash
