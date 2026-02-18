@@ -50,6 +50,15 @@ models:
 On each turn, the orchestrator chooses exactly one specialist domain from:
 `general`, `health`, `parenting`, `relationships`, `homelab`, `personal_development`.
 
+Routing continuity is sticky across conversation history:
+
+- every turn is classified by the orchestrator model
+- if previous user messages exist in the same session, Mobius sends recent routed
+  domain history (last 3 domains) to the classifier as continuity context
+- classifier is instructed to keep the current domain unless the user clearly asks
+  to switch (or the topic clearly shifts)
+- continuity does not parse `Answered by ...`; that prefix is UI-only
+
 For non-general routes, the assistant response starts with:
 
 `*Answered by the <specialist> specialist.*`

@@ -76,7 +76,13 @@ class SpecialistRouter:
     def model(self) -> str:
         return self.config.models.orchestrator
 
-    async def classify(self, latest_user_text: str) -> SpecialistRoute:
+    async def classify(
+        self,
+        latest_user_text: str,
+        *,
+        current_domain: str | None = None,
+        recent_domains: list[str] | None = None,
+    ) -> SpecialistRoute:
         user_text = latest_user_text.strip()
         if not user_text:
             return SpecialistRoute(
@@ -86,12 +92,40 @@ class SpecialistRouter:
                 orchestrator_model=None,
             )
 
+        normalized_recent_domains: list[str] = []
+        for domain in recent_domains or []:
+            normalized = normalize_domain(str(domain))
+            if normalized in self.allowed_domains:
+                normalized_recent_domains.append(normalized)
+
+        normalized_current_domain = normalize_domain(current_domain or "")
+        if normalized_current_domain not in self.allowed_domains:
+            normalized_current_domain = ""
+        if (
+            normalized_current_domain
+            and normalized_current_domain not in normalized_recent_domains
+        ):
+            normalized_recent_domains.append(normalized_current_domain)
+
+        current_domain_line = normalized_current_domain or "none"
+        recent_domains_line = (
+            ", ".join(normalized_recent_domains) if normalized_recent_domains else "none"
+        )
         specialist_lines = "\n".join(
             f"- {profile.domain}: {profile.routing_hint}" for profile in SPECIALISTS
         )
         system_prompt = (
             "You are the routing orchestrator for Mobius.\n"
             "Your job: choose exactly ONE specialist for the latest user message.\n"
+            "Routing continuity context (from the active chat session):\n"
+            f"- current_domain: {current_domain_line}\n"
+            f"- recent_domains: {recent_domains_line}\n"
+            "Continuity policy:\n"
+            "- If current_domain is not none, prefer keeping that domain.\n"
+            "- Change domain only if the latest user message clearly requests a different "
+            "specialist/domain or shows a clear topic shift.\n"
+            "- Explicit switch examples include phrases like "
+            "'route to health specialist' or 'naj odgovori personal_development specialist'.\n"
             "Always respond with ONLY a single JSON object and nothing else.\n"
             "Do not include markdown, code fences, commentary, or extra keys.\n"
             "JSON schema:\n"

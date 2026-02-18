@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from uuid import uuid4
 from mobius.api.schemas import ChatCompletionRequest, OpenAIMessage, latest_user_text
 from mobius.config import AppConfig
 from mobius.logging_setup import get_logger
+from mobius.orchestration.session_store import StickySessionStore
 from mobius.orchestration.specialist_router import SpecialistRouter
 from mobius.orchestration.specialists import SpecialistProfile, get_specialist
 from mobius.prompts.manager import PromptManager
@@ -25,6 +27,16 @@ class RoutingDecision:
     route_model: str
     response_model: str
     orchestrator_model: str | None
+
+
+SESSION_ID_FIELDS: tuple[str, ...] = (
+    "session_id",
+    "conversation_id",
+    "chat_id",
+    "thread_id",
+    "session",
+    "conversation",
+)
 
 
 def _message_to_dict(message: OpenAIMessage) -> dict[str, Any]:
@@ -49,11 +61,13 @@ class Orchestrator:
         llm_router: LiteLLMRouter,
         specialist_router: SpecialistRouter,
         prompt_manager: PromptManager,
+        session_store: StickySessionStore | None = None,
     ) -> None:
         self.config = config
         self.llm_router = llm_router
         self.specialist_router = specialist_router
         self.prompt_manager = prompt_manager
+        self.session_store = session_store or StickySessionStore(history_size=3)
         self.logger = get_logger(__name__)
         self.public_model_id = self.config.api.public_model_id
         self.allow_provider_model_passthrough = (
@@ -64,12 +78,81 @@ class Orchestrator:
     def _timestamp_context_line(self) -> str:
         return timestamp_context_line(self.config.runtime.timezone)
 
+    @staticmethod
+    def _first_user_text(messages: list[OpenAIMessage]) -> str:
+        for message in messages:
+            if message.role != "user":
+                continue
+            text = message.text_content().strip()
+            if text:
+                return text
+        return ""
+
+    @staticmethod
+    def _is_first_user_prompt(messages: list[OpenAIMessage]) -> bool:
+        user_count = 0
+        assistant_count = 0
+        for message in messages:
+            if message.role == "user":
+                user_count += 1
+            elif message.role == "assistant":
+                assistant_count += 1
+        return user_count == 1 and assistant_count == 0
+
+    def _session_key_for_request(self, request: ChatCompletionRequest) -> str | None:
+        extras = request.model_extra if isinstance(request.model_extra, dict) else {}
+        for field in SESSION_ID_FIELDS:
+            raw = extras.get(field)
+            if raw is None:
+                continue
+            value = str(raw).strip()
+            if value:
+                return f"{field}:{value}"
+
+        first_user = self._first_user_text(request.messages)
+        if not first_user:
+            return None
+
+        digest = hashlib.sha256(first_user.encode("utf-8")).hexdigest()[:16]
+        user_id = (request.user or "").strip()
+        if user_id:
+            return f"user:{user_id}:first:{digest}"
+        return f"first:{digest}"
+
     async def _decide_routing(
-        self, user_text: str, requested_model: str | None
+        self,
+        messages: list[OpenAIMessage],
+        requested_model: str | None,
+        session_key: str | None,
     ) -> RoutingDecision:
-        route = await self.specialist_router.classify(user_text)
+        user_text = latest_user_text(messages)
+        recent_domains = (
+            self.session_store.recent_domains(session_key) if session_key else []
+        )
+        current_domain = recent_domains[-1] if recent_domains else None
+        route = await self.specialist_router.classify(
+            user_text,
+            current_domain=current_domain,
+            recent_domains=recent_domains,
+        )
         domain = route.domain
         confidence = route.confidence
+        orchestrator_model = route.orchestrator_model
+        if current_domain:
+            if domain == current_domain:
+                self.logger.info(
+                    "Routing kept domain=%s using session context session=%s.",
+                    domain,
+                    session_key,
+                )
+            else:
+                self.logger.info(
+                    "Routing switched domain=%s -> %s using session context session=%s.",
+                    current_domain,
+                    domain,
+                    session_key,
+                )
+
         selected: list[SpecialistProfile] = []
         if domain != "general":
             selected = [get_specialist(domain)]
@@ -105,7 +188,7 @@ class Orchestrator:
             confidence=confidence,
             route_model=route_model,
             response_model=response_model,
-            orchestrator_model=route.orchestrator_model,
+            orchestrator_model=orchestrator_model,
         )
         self.logger.debug(
             "Routing decision domain=%s confidence=%.2f specialists=%s route_model=%s response_model=%s orchestrator_model=%s requested_model=%s passthrough=%s",
@@ -171,7 +254,10 @@ class Orchestrator:
         if self.config.logging.include_payloads:
             self.logger.debug("Non-stream user_text=%s", user_text)
 
-        decision = await self._decide_routing(user_text, request.model)
+        session_key = self._session_key_for_request(request)
+        if session_key and self._is_first_user_prompt(request.messages):
+            self.session_store.reset(session_key)
+        decision = await self._decide_routing(request.messages, request.model, session_key)
         messages = self._build_orchestrated_messages(request, decision)
 
         passthrough = request.model_dump(
@@ -192,6 +278,8 @@ class Orchestrator:
             response["choices"][0]["message"]["content"] = augmented
         except Exception:
             pass
+        if session_key:
+            self.session_store.remember_domain(session_key, decision.domain)
         self.logger.info(
             "Non-stream completion finished public_model=%s internal_model=%s elapsed_ms=%d",
             decision.response_model,
@@ -211,7 +299,10 @@ class Orchestrator:
         if self.config.logging.include_payloads:
             self.logger.debug("Stream user_text=%s", user_text)
 
-        decision = await self._decide_routing(user_text, request.model)
+        session_key = self._session_key_for_request(request)
+        if session_key and self._is_first_user_prompt(request.messages):
+            self.session_store.reset(session_key)
+        decision = await self._decide_routing(request.messages, request.model, session_key)
         messages = self._build_orchestrated_messages(request, decision)
         passthrough = request.model_dump(
             exclude={"messages", "model", "stream"},
@@ -223,6 +314,8 @@ class Orchestrator:
             stream=True,
             passthrough=passthrough,
         )
+        if session_key:
+            self.session_store.remember_domain(session_key, decision.domain)
 
         stream_id: str | None = None
         chunk_count = 0

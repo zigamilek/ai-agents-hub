@@ -179,3 +179,24 @@ def test_routing_can_include_timestamp_when_enabled() -> None:
     asyncio.run(router.classify(query))
     system_prompt = str(llm.calls[0]["messages"][0]["content"])
     assert "Current timestamp:" in system_prompt
+
+
+def test_routing_prompt_includes_session_domain_history_context() -> None:
+    query = "Kako naj izboljsam naslednji korak?"
+    llm = StubLLMRouter(
+        outputs=[
+            '{"specialist":"homelab","confidence":0.77,"reason":"kept from continuity context"}'
+        ]
+    )
+    router = SpecialistRouter(config=_config(), llm_router=llm)  # type: ignore[arg-type]
+    asyncio.run(
+        router.classify(
+            query,
+            current_domain="homelab",
+            recent_domains=["health", "homelab"],
+        )
+    )
+    system_prompt = str(llm.calls[0]["messages"][0]["content"])
+    assert "current_domain: homelab" in system_prompt
+    assert "recent_domains: health, homelab" in system_prompt
+    assert "Change domain only if the latest user message clearly requests a different specialist/domain" in system_prompt

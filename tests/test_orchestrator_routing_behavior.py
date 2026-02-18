@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from mobius.api.schemas import ChatCompletionRequest
@@ -50,9 +50,21 @@ class StubSpecialistRouter:
     reason: str = "test"
     orchestrator_model: str = "gpt-5-nano-2025-08-07"
     latest_seen_text: str = ""
+    latest_seen_current_domain: str | None = None
+    latest_seen_recent_domains: list[str] = field(default_factory=list)
+    classify_calls: int = 0
 
-    async def classify(self, latest_user_text: str) -> SpecialistRoute:
+    async def classify(
+        self,
+        latest_user_text: str,
+        *,
+        current_domain: str | None = None,
+        recent_domains: list[str] | None = None,
+    ) -> SpecialistRoute:
+        self.classify_calls += 1
         self.latest_seen_text = latest_user_text
+        self.latest_seen_current_domain = current_domain
+        self.latest_seen_recent_domains = list(recent_domains or [])
         return SpecialistRoute(
             domain=self.domain,
             confidence=self.confidence,
@@ -119,14 +131,22 @@ def _config() -> AppConfig:
     )
 
 
-def _request(messages: list[dict[str, Any]]) -> ChatCompletionRequest:
-    return ChatCompletionRequest.model_validate(
-        {
-            "model": "mobius",
-            "messages": messages,
-            "stream": False,
-        }
-    )
+def _request(
+    messages: list[dict[str, Any]],
+    *,
+    user: str | None = None,
+    session_id: str | None = None,
+) -> ChatCompletionRequest:
+    payload: dict[str, Any] = {
+        "model": "mobius",
+        "messages": messages,
+        "stream": False,
+    }
+    if user is not None:
+        payload["user"] = user
+    if session_id is not None:
+        payload["session_id"] = session_id
+    return ChatCompletionRequest.model_validate(payload)
 
 
 def _build_orchestrator(
@@ -209,3 +229,64 @@ def test_routing_uses_latest_user_message_only() -> None:
     )
     asyncio.run(orchestrator.complete_non_stream(request))
     assert specialist_router.latest_seen_text == "Actually, my son ignores instructions."
+
+
+def test_routing_passes_session_domain_history_to_classifier() -> None:
+    orchestrator, llm_router, specialist_router = _build_orchestrator(
+        domain="homelab",
+        answer_text="Use VLAN segmentation and nightly backups.",
+    )
+    first_request = _request(
+        [{"role": "user", "content": "Can you help with my homelab network?"}],
+        session_id="chat-1",
+    )
+    asyncio.run(orchestrator.complete_non_stream(first_request))
+    assert specialist_router.classify_calls == 1
+    assert specialist_router.latest_seen_current_domain is None
+    assert specialist_router.latest_seen_recent_domains == []
+
+    # Follow-up turn should still call classifier, but with continuity context.
+    specialist_router.domain = "homelab"
+    followup_request = _request(
+        [
+            {"role": "user", "content": "Can you help with my homelab network?"},
+            {"role": "assistant", "content": "Previous answer from Mobius."},
+            {"role": "user", "content": "What should I improve next?"},
+        ],
+        session_id="chat-1",
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(followup_request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert content.startswith("*Answered by the homelab specialist.*\n\n")
+    assert llm_router.calls[-1]["primary_model"] == "gemini-2.5-flash"
+    assert specialist_router.classify_calls == 2
+    assert specialist_router.latest_seen_current_domain == "homelab"
+    assert specialist_router.latest_seen_recent_domains == ["homelab"]
+
+
+def test_sticky_session_resets_when_request_is_first_user_prompt() -> None:
+    orchestrator, llm_router, specialist_router = _build_orchestrator(
+        domain="health",
+        answer_text="Use snapshots before patch windows.",
+    )
+    first_request = _request(
+        [{"role": "user", "content": "My elbow hurts after tennis."}],
+        session_id="chat-2",
+    )
+    asyncio.run(orchestrator.complete_non_stream(first_request))
+    assert specialist_router.classify_calls == 1
+
+    # New session turn (single user prompt) must reset sticky state.
+    specialist_router.domain = "homelab"
+    reset_request = _request(
+        [{"role": "user", "content": "Now help with Proxmox backups."}],
+        session_id="chat-2",
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(reset_request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert content.startswith("*Answered by the homelab specialist.*\n\n")
+    assert llm_router.calls[-1]["primary_model"] == "gemini-2.5-flash"
+    assert specialist_router.latest_seen_text == "Now help with Proxmox backups."
+    assert specialist_router.latest_seen_current_domain is None
+    assert specialist_router.latest_seen_recent_domains == []
+    assert specialist_router.classify_calls == 2
