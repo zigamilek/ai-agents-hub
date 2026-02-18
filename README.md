@@ -176,6 +176,7 @@ mobius start                      # systemd start   (LXC/server)
 mobius stop                       # systemd stop    (LXC/server)
 mobius restart                    # systemd restart (LXC/server)
 mobius update                     # run in-LXC updater (same flow as one-liner)
+mobius db bootstrap-local         # bootstrap local PostgreSQL + pgvector for state
 mobius logs --follow              # journal logs (default source)
 mobius logs --file --follow       # file logs from configured log path
 ```
@@ -276,6 +277,16 @@ Run on the Proxmox host:
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
 ```
 
+By default, fresh installs now attempt local DB bootstrap (PostgreSQL + pgvector)
+and enable `state.enabled=true` automatically when bootstrap succeeds.
+
+To skip this behavior:
+
+```bash
+MOBIUS_BOOTSTRAP_LOCAL_DB=no \
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
+```
+
 Optional overrides (same style as community-scripts):
 
 ```bash
@@ -298,10 +309,22 @@ Run inside the container (recommended):
 mobius update
 ```
 
+If you want update-time DB bootstrap as well, run:
+
+```bash
+MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=yes mobius update
+```
+
 Equivalent one-liner:
 
 ```bash
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/<BRANCH>/ct/mobius.sh)"
+```
+
+Retrofit local DB bootstrap in an existing LXC:
+
+```bash
+sudo mobius db bootstrap-local
 ```
 
 When executed inside LXC, this runs the script update flow and refreshes:

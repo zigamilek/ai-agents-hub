@@ -11,6 +11,7 @@ SERVICE_NAME="mobius"
 SERVICE_USER="mobius"
 REPO_URL="${REPO_URL:-https://github.com/zigamilek/mobius.git}"
 REPO_REF="${REPO_REF:-master}"
+BOOTSTRAP_LOCAL_DB="${MOBIUS_BOOTSTRAP_LOCAL_DB:-yes}"
 
 _detect_service_port() {
   local config_file="${CONFIG_DIR}/config.yaml"
@@ -118,6 +119,8 @@ if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 MOBIUS_API_KEY=change-me
+MOBIUS_STATE_ENABLED=false
+MOBIUS_STATE_DSN=
 EOF
 fi
 $STD chmod 600 "${CONFIG_DIR}/mobius.env"
@@ -130,6 +133,27 @@ msg_ok "Configuration installed"
 
 msg_info "Installing systemd service"
 $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
+
+_should_bootstrap_local_db() {
+  local value
+  value="$(echo "${BOOTSTRAP_LOCAL_DB}" | tr '[:upper:]' '[:lower:]')"
+  case "${value}" in
+    1|true|yes|on) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+if _should_bootstrap_local_db; then
+  msg_info "Bootstrapping local PostgreSQL for state features"
+  if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
+    msg_ok "Local PostgreSQL bootstrap completed"
+  else
+    msg_warn "Local PostgreSQL bootstrap failed; continuing install with state disabled"
+    msg_warn "Run 'mobius db bootstrap-local' after install to retry"
+  fi
+else
+  msg_info "Skipping local PostgreSQL bootstrap (MOBIUS_BOOTSTRAP_LOCAL_DB=${BOOTSTRAP_LOCAL_DB})"
+fi
 
 msg_info "Applying ownership"
 $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius /var/lib/mobius/state

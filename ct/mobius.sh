@@ -60,6 +60,7 @@ function update_script() {
   local SERVICE_USER="mobius"
   local REPO_URL="${REPO_URL:-$MOBIUS_REPO_URL}"
   local REPO_REF="${REPO_REF:-$MOBIUS_REPO_REF}"
+  local BOOTSTRAP_ON_UPDATE="${MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE:-no}"
   local GIT_SAFE_ARGS=(-c "safe.directory=${APP_DIR}")
 
   detect_service_port() {
@@ -170,6 +171,8 @@ function update_script() {
 OPENAI_API_KEY=
 GEMINI_API_KEY=
 MOBIUS_API_KEY=change-me
+MOBIUS_STATE_ENABLED=false
+MOBIUS_STATE_DSN=
 EOF
   fi
   $STD chmod 600 "${CONFIG_DIR}/mobius.env"
@@ -180,6 +183,21 @@ EOF
   $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
   $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius /var/lib/mobius/state
   msg_ok "Runtime files refreshed"
+
+  case "$(echo "${BOOTSTRAP_ON_UPDATE}" | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on)
+      msg_info "Bootstrapping local PostgreSQL during update"
+      if $STD /usr/local/bin/mobius db bootstrap-local --yes --no-restart; then
+        msg_ok "Local PostgreSQL bootstrap completed"
+      else
+        msg_warn "Local PostgreSQL bootstrap failed during update"
+        msg_warn "Run 'mobius db bootstrap-local' manually to retry"
+      fi
+      ;;
+    *)
+      msg_info "Skipping DB bootstrap on update (MOBIUS_BOOTSTRAP_LOCAL_DB_ON_UPDATE=${BOOTSTRAP_ON_UPDATE})"
+      ;;
+  esac
 
   msg_info "Restarting ${SERVICE_NAME}"
   $STD systemctl daemon-reload
