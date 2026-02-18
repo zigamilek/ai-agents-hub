@@ -10,6 +10,9 @@ Mobius is a custom router/orchestrator service that exposes an OpenAI-compatible
 - LLM-based specialist routing with one coherent final response
 - Image payload passthrough through `chat/completions`
 - Configurable specialist prompts loaded from markdown files
+- Optional stateful coaching pipeline (check-in, journal, memory) with automatic writes
+- One-way markdown projection from PostgreSQL state into human-readable files
+- Response footer summarizing state writes and projection targets
 - Restart-safe persistence and diagnostics endpoints
 
 ## Configuration
@@ -35,6 +38,51 @@ Use:
 - `/etc/mobius/mobius.env` for systemd deployments
 
 For local macOS testing, use `config.local.yaml` so data and logs stay under `./data`.
+
+### Stateful Pipeline (Phase 1)
+
+Stateful features are disabled by default and can be enabled with:
+
+```yaml
+state:
+  enabled: true
+  database:
+    dsn: ${ENV:MOBIUS_STATE_DSN}
+  projection:
+    mode: one_way
+    output_directory: /var/lib/mobius/state
+  user_scope:
+    policy: by_user
+    anonymous_user_key: anonymous
+  decision:
+    enabled: true
+    model: ""                # empty => fallback to models.orchestrator
+    include_fallbacks: false
+    max_json_retries: 1      # auto-retry when output is invalid JSON/schema
+    on_failure: footer_warning
+  checkin:
+    enabled: true
+  journal:
+    enabled: true
+  memory:
+    enabled: true
+    semantic_merge:
+      enabled: true
+      embedding_model: text-embedding-3-small
+      verification_model: "" # empty => fallback to models.orchestrator
+      max_json_retries: 1
+```
+
+Phase 1 storage contract:
+
+- Source of truth: PostgreSQL (`users`, `turn_events`, `tracks`, `checkin_events`, `journal_entries`, `memory_cards`, `write_operations`, projection state, etc.)
+- Projection: one-way markdown export under `state/users/<user_key>/...`
+- Retry safety: idempotency keys per request+channel
+- Decision engine: model-driven JSON contract with schema validation and retry
+- Memory dedupe: semantic merge using embeddings + verifier model decision
+- Failure visibility: if decision model fails, response footer can show state-warning
+
+Single prompt can trigger multiple writes (check-in + journal + memory) when justified.
 
 ### Specialist Routing Model
 
@@ -160,7 +208,10 @@ You can validate routing behavior locally before pushing/deploying:
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[dev]'
-python -m pytest -q tests/test_specialist_router.py tests/test_orchestrator_routing_behavior.py
+python -m pytest -q \
+  tests/test_specialist_router.py \
+  tests/test_orchestrator_routing_behavior.py \
+  tests/test_state_decision_engine.py
 ```
 
 To print each routing test query and selected specialist:
@@ -308,11 +359,10 @@ specialists:
     general:
       model: gpt-5.2
       prompt_file: general.md
-      display_name: The Generalist
     health:
       model: gpt-5.2
       prompt_file: health.md
-      display_name: The Healer
+      display_name: The Coach
     parenting:
       model: gpt-5.2
       prompt_file: parenting.md
@@ -320,11 +370,11 @@ specialists:
     relationships:
       model: gpt-5.2
       prompt_file: relationships.md
-      display_name: The Mediator
+      display_name: The Counselor
     homelab:
       model: gpt-5.2
       prompt_file: homelab.md
-      display_name: The Builder
+      display_name: The Tinkerer
     personal_development:
       model: gpt-5.2
       prompt_file: personal_development.md
