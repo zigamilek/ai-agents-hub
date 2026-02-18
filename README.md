@@ -167,7 +167,7 @@ mobius --version
 Common Mobius CLI commands:
 
 ```bash
-mobius onboarding                 # interactive setup (with overwrite confirmation)
+mobius onboarding                 # interactive setup (keep/overwrite/cancel existing values)
 mobius version                    # print version
 mobius paths                      # print config/env/prompts/log paths
 mobius diagnostics                # print curl checks and detected local IP

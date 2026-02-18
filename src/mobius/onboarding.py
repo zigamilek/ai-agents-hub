@@ -80,6 +80,25 @@ def _prompt_confirm(prompt: str, default: bool = False) -> bool:
     return raw in {"y", "yes"}
 
 
+def _prompt_existing_data_mode() -> str:
+    print("Choose how to proceed:")
+    print("  [k] keep existing values as defaults and continue onboarding")
+    print("  [o] overwrite existing values during onboarding")
+    print("  [c] cancel")
+    while True:
+        try:
+            raw = input("Selection [k/o/c] (default: k): ").strip().lower()
+        except EOFError:
+            return "keep"
+        if raw in {"", "k", "keep"}:
+            return "keep"
+        if raw in {"o", "overwrite"}:
+            return "overwrite"
+        if raw in {"c", "cancel"}:
+            return "cancel"
+        print("Invalid selection. Please enter k, o, or c.")
+
+
 def _is_meaningful_secret(value: str | None) -> bool:
     raw = (value or "").strip()
     if not raw:
@@ -164,10 +183,15 @@ def run_onboarding(
         for signal in signals:
             print(f"- {signal}")
         print("")
-        if not _prompt_confirm("Overwrite existing onboarding values?", default=False):
+        mode = _prompt_existing_data_mode()
+        if mode == "cancel":
             print("Onboarding cancelled. No files were modified.")
             print("")
             return
+        if mode == "keep":
+            print("Continuing onboarding with existing values as defaults.")
+        else:
+            print("Continuing onboarding in overwrite mode.")
         print("")
 
     raw_server = _as_dict(raw.get("server"))
