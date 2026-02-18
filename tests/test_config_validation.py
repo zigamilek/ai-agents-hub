@@ -95,3 +95,36 @@ def test_api_attribution_template_rejects_empty_string() -> None:
     payload["api"]["attribution"] = {"template": "   "}
     with pytest.raises(ValidationError):
         AppConfig.model_validate(payload)
+
+
+def test_state_enabled_requires_database_dsn() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"enabled": True, "database": {"dsn": None}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_schema_version_rejects_invalid_format() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {
+        "database": {
+            "min_schema_version": "1",
+            "max_schema_version": "0001",
+        }
+    }
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_schema_version_rejects_inverted_range() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {
+        "enabled": True,
+        "database": {
+            "dsn": "postgresql://user:pass@localhost:5432/mobius",
+            "min_schema_version": "0002",
+            "max_schema_version": "0001",
+        },
+    }
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)

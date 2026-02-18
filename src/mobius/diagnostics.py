@@ -7,6 +7,7 @@ from mobius import __version__
 from mobius.config import AppConfig
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
+from mobius.state.store import StateStore
 
 
 def health_payload() -> dict[str, Any]:
@@ -16,12 +17,23 @@ def health_payload() -> dict[str, Any]:
     }
 
 
-def readiness_payload(config: AppConfig) -> dict[str, Any]:
+def readiness_payload(
+    config: AppConfig, state_store: StateStore | None = None
+) -> dict[str, Any]:
     openai_ready = bool(config.providers.openai.api_key)
     gemini_ready = bool(config.providers.gemini.api_key)
+    state_ready = state_store.status.ready if state_store is not None else True
+    if config.state.enabled and state_store is None:
+        state_ready = False
     return {
-        "status": "ready" if (openai_ready or gemini_ready) else "degraded",
+        "status": "ready"
+        if ((openai_ready or gemini_ready) and state_ready)
+        else "degraded",
         "providers": {"openai": openai_ready, "gemini": gemini_ready},
+        "state": {
+            "enabled": config.state.enabled,
+            "ready": state_ready,
+        },
     }
 
 
@@ -29,6 +41,7 @@ def diagnostics_payload(
     config: AppConfig,
     llm_router: LiteLLMRouter,
     prompt_manager: PromptManager | None = None,
+    state_store: StateStore | None = None,
 ) -> dict[str, Any]:
     prompt_config: dict[str, Any] = {
         "directory": str(config.specialists.prompts_directory),
@@ -36,6 +49,8 @@ def diagnostics_payload(
     }
     if prompt_manager is not None:
         prompt_config["files"] = prompt_manager.resolved_prompt_files()
+
+    state_runtime = state_store.status.as_dict() if state_store is not None else None
 
     return {
         "service": "mobius",
@@ -58,6 +73,20 @@ def diagnostics_payload(
                 "inject_current_timestamp": config.runtime.inject_current_timestamp,
                 "timezone": config.runtime.timezone,
                 "include_timestamp_in_routing": config.runtime.include_timestamp_in_routing,
+            },
+            "state": {
+                "enabled": config.state.enabled,
+                "database": {
+                    "auto_migrate": config.state.database.auto_migrate,
+                    "min_schema_version": config.state.database.min_schema_version,
+                    "max_schema_version": config.state.database.max_schema_version,
+                    "connect_timeout_seconds": config.state.database.connect_timeout_seconds,
+                },
+                "projection": {
+                    "mode": config.state.projection.mode,
+                    "output_directory": str(config.state.projection.output_directory),
+                },
+                "runtime": state_runtime,
             },
             "prompts": prompt_config,
             "logging": {

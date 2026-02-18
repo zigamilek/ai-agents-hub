@@ -7,7 +7,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from mobius.specialist_catalog import SPECIALIST_DOMAINS, normalize_domain
 
@@ -18,6 +18,7 @@ except Exception:  # pragma: no cover - optional at runtime
 
 
 ENV_REF_PATTERN = re.compile(r"^\$\{ENV:([A-Z0-9_]+)\}$")
+SCHEMA_VERSION_PATTERN = re.compile(r"^\d{4}$")
 
 
 class StrictConfigModel(BaseModel):
@@ -176,6 +177,60 @@ class RuntimeConfig(StrictConfigModel):
         return timezone_name
 
 
+class StateDatabaseConfig(StrictConfigModel):
+    dsn: str | None = None
+    auto_migrate: bool = True
+    min_schema_version: str = "0001"
+    max_schema_version: str = "0001"
+    connect_timeout_seconds: int = 5
+
+    @field_validator("dsn")
+    @classmethod
+    def _dsn_non_empty_if_set(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip()
+        return trimmed or None
+
+    @field_validator("min_schema_version", "max_schema_version")
+    @classmethod
+    def _schema_version_format(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not SCHEMA_VERSION_PATTERN.match(trimmed):
+            raise ValueError("Schema versions must match 'NNNN' format (example: 0001).")
+        return trimmed
+
+    @field_validator("connect_timeout_seconds")
+    @classmethod
+    def _positive_timeout(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("connect_timeout_seconds must be >= 1.")
+        return value
+
+
+class StateProjectionConfig(StrictConfigModel):
+    mode: Literal["one_way", "hybrid_bidirectional"] = "one_way"
+    output_directory: Path = Path("./data/state")
+
+
+class StateConfig(StrictConfigModel):
+    enabled: bool = False
+    database: StateDatabaseConfig = Field(default_factory=StateDatabaseConfig)
+    projection: StateProjectionConfig = Field(default_factory=StateProjectionConfig)
+
+    @model_validator(mode="after")
+    def _validate_enabled_dsn(self) -> "StateConfig":
+        if not self.enabled:
+            return self
+        if not self.database.dsn:
+            raise ValueError("state.database.dsn must be set when state.enabled is true.")
+        if self.database.min_schema_version > self.database.max_schema_version:
+            raise ValueError(
+                "state.database.min_schema_version must be <= max_schema_version."
+            )
+        return self
+
+
 class AppConfig(StrictConfigModel):
     server: ServerConfig = Field(...)
     providers: ProvidersConfig = Field(...)
@@ -183,6 +238,7 @@ class AppConfig(StrictConfigModel):
     api: ApiConfig = Field(...)
     specialists: SpecialistsConfig = Field(...)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    state: StateConfig = Field(default_factory=StateConfig)
     diagnostics: DiagnosticsConfig = Field(default_factory=DiagnosticsConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
@@ -263,5 +319,32 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
             os.getenv("MOBIUS_PROMPTS_AUTO_RELOAD", "true").lower()
             in {"1", "true", "yes", "on"}
         )
+    if os.getenv("MOBIUS_STATE_ENABLED"):
+        config.state.enabled = (
+            os.getenv("MOBIUS_STATE_ENABLED", "false").lower()
+            in {"1", "true", "yes", "on"}
+        )
+    if os.getenv("MOBIUS_STATE_DSN"):
+        dsn = os.getenv("MOBIUS_STATE_DSN", "").strip()
+        config.state.database.dsn = dsn or None
+    if os.getenv("MOBIUS_STATE_CONNECT_TIMEOUT_SECONDS"):
+        try:
+            config.state.database.connect_timeout_seconds = int(
+                os.getenv("MOBIUS_STATE_CONNECT_TIMEOUT_SECONDS", "5")
+            )
+        except Exception:
+            pass
+    if os.getenv("MOBIUS_STATE_PROJECTION_DIR"):
+        config.state.projection.output_directory = Path(
+            os.getenv(
+                "MOBIUS_STATE_PROJECTION_DIR",
+                str(config.state.projection.output_directory),
+            )
+        )
+    if os.getenv("MOBIUS_STATE_PROJECTION_MODE"):
+        mode = os.getenv("MOBIUS_STATE_PROJECTION_MODE", "").strip().lower()
+        if mode in {"one_way", "hybrid_bidirectional"}:
+            config.state.projection.mode = mode  # type: ignore[assignment]
 
-    return config
+    # Re-validate after env overrides to enforce cross-field invariants.
+    return AppConfig.model_validate(config.model_dump())

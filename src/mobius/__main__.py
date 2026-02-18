@@ -80,10 +80,12 @@ def _print_runtime_paths(
         prompts_dir = config.specialists.prompts_directory
         log_dir = config.logging.directory
         log_file = config.logging.directory / config.logging.filename
+        state_dir = config.state.projection.output_directory
     else:
         prompts_dir = Path("/etc/mobius/system_prompts")
         log_dir = Path("/var/log/mobius")
         log_file = log_dir / "mobius.log"
+        state_dir = Path("/var/lib/mobius/state")
 
     print("")
     print("Mobius Paths")
@@ -93,6 +95,7 @@ def _print_runtime_paths(
     print(f"System prompts dir: {prompts_dir} ({_path_state(prompts_dir)})")
     print(f"Logs directory:     {log_dir} ({_path_state(log_dir)})")
     print(f"Log file:           {log_file} ({_path_state(log_file)})")
+    print(f"State directory:    {state_dir} ({_path_state(state_dir)})")
     if config_error:
         print("")
         print(f"Config load note: {config_error}")

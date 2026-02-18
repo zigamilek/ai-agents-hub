@@ -34,3 +34,5 @@ def test_diagnostics_endpoints_are_available() -> None:
     assert payload["version"] == __version__
     assert payload["config"]["api"]["public_model_id"] == "mobius"
     assert payload["config"]["api"]["attribution"]["enabled"] is True
+    assert payload["config"]["state"]["enabled"] is False
+    assert payload["config"]["state"]["projection"]["mode"] == "one_way"
