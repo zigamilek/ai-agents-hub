@@ -34,23 +34,22 @@ specialists:
     general:
       model: gpt-5.2
       prompt_file: general.md
-      display_name: The Generalist
     health:
       model: gpt-5.2
       prompt_file: health.md
-      display_name: The Healer
+      display_name: The Coach
     parenting:
       model: gpt-5.2
       prompt_file: parenting.md
-      display_name: The Coach
+      display_name: The Parenting Coach
     relationships:
       model: gpt-5.2
       prompt_file: relationships.md
-      display_name: The Mediator
+      display_name: The Counselor
     homelab:
       model: gpt-5.2
       prompt_file: homelab.md
-      display_name: The Builder
+      display_name: The Tinkerer
     personal_development:
       model: gpt-5.2
       prompt_file: personal_development.md
