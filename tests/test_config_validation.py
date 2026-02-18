@@ -30,7 +30,7 @@ def _valid_config() -> dict:
         "specialists": {
             "prompts_directory": "./system_prompts",
             "auto_reload": True,
-            "orchestrator_prompt_file": "orchestrator.md",
+            "orchestrator_prompt_file": "_orchestrator.md",
             "by_domain": {
                 "general": {"model": "gpt-5.2", "prompt_file": "general.md"},
                 "health": {"model": "gpt-5.2", "prompt_file": "health.md"},

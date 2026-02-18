@@ -233,7 +233,7 @@ Config location:
 specialists:
   prompts_directory: ./system_prompts
   auto_reload: true
-  orchestrator_prompt_file: orchestrator.md
+  orchestrator_prompt_file: _orchestrator.md
   by_domain:
     general:
       model: gpt-5.2
@@ -257,7 +257,7 @@ specialists:
 
 The master routing orchestrator prompt is:
 
-- `orchestrator.md`
+- `_orchestrator.md`
 
 When `auto_reload: true`, prompt edits are reloaded automatically on next request.
 If you changed `config.yaml` itself, restart the service.

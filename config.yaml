@@ -24,7 +24,7 @@ api:
 specialists:
   prompts_directory: /etc/mobius/system_prompts
   auto_reload: true
-  orchestrator_prompt_file: orchestrator.md
+  orchestrator_prompt_file: _orchestrator.md
   by_domain:
     general:
       model: gpt-5.2

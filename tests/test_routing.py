@@ -26,7 +26,7 @@ def _config(prompt_dir: Path) -> AppConfig:
             "specialists": {
                 "prompts_directory": str(prompt_dir),
                 "auto_reload": True,
-                "orchestrator_prompt_file": "orchestrator.md",
+                "orchestrator_prompt_file": "_orchestrator.md",
                 "by_domain": {
                     "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
                     "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},
@@ -63,7 +63,7 @@ def test_prompt_file_reload_and_general_prompt_override(tmp_path: Path) -> None:
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
     files = {
-        "orchestrator.md": "Orchestrator prompt one",
+        "_orchestrator.md": "Orchestrator prompt one",
         "general.md": "General prompt one",
         "health.md": "Health prompt",
         "parenting.md": "Parenting prompt",

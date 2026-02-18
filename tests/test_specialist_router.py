@@ -64,7 +64,7 @@ def _config() -> AppConfig:
             },
             "specialists": {
                 "prompts_directory": "./system_prompts",
-                "orchestrator_prompt_file": "orchestrator.md",
+                "orchestrator_prompt_file": "_orchestrator.md",
                 "by_domain": {
                     "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
                     "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},

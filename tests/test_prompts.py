@@ -25,7 +25,7 @@ def _config(prompt_dir: Path) -> AppConfig:
             "specialists": {
                 "prompts_directory": str(prompt_dir),
                 "auto_reload": True,
-                "orchestrator_prompt_file": "orchestrator.md",
+                "orchestrator_prompt_file": "_orchestrator.md",
                 "by_domain": {
                     "general": {"model": "gpt-4o-mini", "prompt_file": "general.md"},
                     "health": {"model": "gpt-4o-mini", "prompt_file": "health.md"},
@@ -63,20 +63,21 @@ def test_missing_prompt_file_uses_fallback(tmp_path: Path) -> None:
 def test_prompt_auto_reload_on_change(tmp_path: Path) -> None:
     prompt_dir = tmp_path / "prompts"
     prompt_dir.mkdir(parents=True, exist_ok=True)
-    for key in (
-        "orchestrator",
-        "general",
-        "health",
-        "parenting",
-        "relationships",
-        "homelab",
-        "personal_development",
-    ):
-        (prompt_dir / f"{key}.md").write_text(f"{key} v1", encoding="utf-8")
+    files = {
+        "_orchestrator.md": "orchestrator v1",
+        "general.md": "general v1",
+        "health.md": "health v1",
+        "parenting.md": "parenting v1",
+        "relationships.md": "relationships v1",
+        "homelab.md": "homelab v1",
+        "personal_development.md": "personal_development v1",
+    }
+    for filename, content in files.items():
+        (prompt_dir / filename).write_text(content, encoding="utf-8")
 
     config = _config(prompt_dir)
     manager = PromptManager(config)
     assert manager.get("orchestrator") == "orchestrator v1"
 
-    (prompt_dir / "orchestrator.md").write_text("orchestrator v2", encoding="utf-8")
+    (prompt_dir / "_orchestrator.md").write_text("orchestrator v2", encoding="utf-8")
     assert manager.get("orchestrator") == "orchestrator v2"
