@@ -4,12 +4,18 @@ import argparse
 
 import uvicorn
 
+from mobius import __version__
 from mobius.config import load_config
 from mobius.onboarding import run_onboarding
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(prog="mobius")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     serve_parser = subparsers.add_parser("serve", help="Run API server")

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
+from mobius import __version__
 from mobius.config import AppConfig
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
@@ -38,6 +39,7 @@ def diagnostics_payload(
 
     return {
         "service": "mobius",
+        "version": __version__,
         "public_model": config.api.public_model_id,
         "models": llm_router.list_models(),
         "config": {

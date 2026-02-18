@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 os.environ.setdefault("MOBIUS_CONFIG", "config.local.yaml")
 
+from mobius import __version__
 from mobius.main import create_app
 
 
@@ -26,4 +27,8 @@ def test_diagnostics_endpoints_are_available() -> None:
     client = TestClient(app)
     assert client.get("/healthz").status_code == 200
     assert client.get("/readyz").status_code == 200
-    assert client.get("/diagnostics").status_code == 200
+    diagnostics = client.get("/diagnostics")
+    assert diagnostics.status_code == 200
+    payload = diagnostics.json()
+    assert payload["service"] == "mobius"
+    assert payload["version"] == __version__

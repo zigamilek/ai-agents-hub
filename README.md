@@ -64,6 +64,8 @@ cp .env.example .env
 # edit .env and set keys
 export MOBIUS_CONFIG="$(pwd)/config.local.yaml"
 mobius
+# show installed CLI version
+mobius --version
 ```
 
 ### Local Debug Modes
@@ -118,6 +120,36 @@ This prints for each query:
 - routing reason
 - orchestrator model calls
 - specialist model calls
+
+## Versioning and Releases
+
+Mobius uses semantic versioning (`MAJOR.MINOR.PATCH`), currently in the `0.x`
+phase while architecture is still evolving.
+
+- `PATCH` (`0.1.1`): bug fixes and safe internal changes
+- `MINOR` (`0.2.0`): new features or behavior/config changes during `0.x`
+- `MAJOR` (`1.0.0`): stable, intentionally versioned public contract
+
+Runtime version visibility:
+
+- CLI: `mobius --version`
+- API: `GET /diagnostics` includes a top-level `version` field
+
+### Release Checklist
+
+1. Update version in:
+   - `pyproject.toml` (`[project].version`)
+   - `src/mobius/__init__.py` (`__version__`)
+2. Run tests:
+   - `python -m pytest -q`
+3. Commit:
+   - `git commit -m "release: vX.Y.Z"`
+4. Tag:
+   - `git tag -a vX.Y.Z -m "Mobius vX.Y.Z"`
+5. Push branch and tags:
+   - `git push && git push --tags`
+6. Deploy a pinned release (recommended):
+   - `REPO_REF=vX.Y.Z bash -c "$(curl -fsSL https://raw.githubusercontent.com/<YOUR_USER>/<YOUR_REPO>/vX.Y.Z/ct/mobius.sh)"`
 
 ## Install in Proxmox LXC
 
