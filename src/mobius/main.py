@@ -13,6 +13,7 @@ from mobius.orchestration.orchestrator import Orchestrator
 from mobius.orchestration.specialist_router import SpecialistRouter
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
+from mobius.state.pipeline import StatePipeline
 from mobius.state.store import StateStore
 
 
@@ -31,15 +32,22 @@ def _build_services(config: AppConfig) -> dict[str, Any]:
     llm_router = LiteLLMRouter(config)
     specialist_router = SpecialistRouter(config=config, llm_router=llm_router)
     prompt_manager = PromptManager(config)
+    state_pipeline = StatePipeline(
+        config=config,
+        state_store=state_store,
+        llm_router=llm_router,
+    )
     orchestrator = Orchestrator(
         config=config,
         llm_router=llm_router,
         specialist_router=specialist_router,
         prompt_manager=prompt_manager,
+        state_pipeline=state_pipeline,
     )
     return {
         "config": config,
         "state_store": state_store,
+        "state_pipeline": state_pipeline,
         "specialist_router": specialist_router,
         "llm_router": llm_router,
         "prompt_manager": prompt_manager,
@@ -55,11 +63,12 @@ def create_app(config_path: str | Path | None = None) -> FastAPI:
 
     services = _build_services(config)
     logger.info(
-        "Services initialized (orchestrator_model=%s, prompts_dir=%s, state_enabled=%s, state_ready=%s)",
+        "Services initialized (orchestrator_model=%s, prompts_dir=%s, state_enabled=%s, state_ready=%s, state_pipeline_enabled=%s)",
         config.models.orchestrator,
         config.specialists.prompts_directory,
         config.state.enabled,
         services["state_store"].status.ready,
+        services["state_pipeline"].enabled,
     )
 
     app = FastAPI(title="Mobius", version="0.1.0")

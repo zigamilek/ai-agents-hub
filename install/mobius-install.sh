@@ -85,7 +85,7 @@ fi
 msg_ok "Service user ready"
 
 msg_info "Preparing directories"
-$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius
+$STD mkdir -p "${APP_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius /var/lib/mobius/state
 msg_ok "Directories prepared"
 
 msg_info "Cloning repository"
@@ -132,7 +132,7 @@ msg_info "Installing systemd service"
 $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
 
 msg_info "Applying ownership"
-$STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius
+$STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius /var/lib/mobius/state
 msg_ok "Ownership applied"
 
 $STD systemctl daemon-reload

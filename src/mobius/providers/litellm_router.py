@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from litellm import acompletion
+from litellm import acompletion, aembedding
 
 from mobius.config import AppConfig
 from mobius.logging_setup import get_logger
@@ -115,3 +115,80 @@ class LiteLLMRouter:
             self.logger.error("All model candidates failed.")
             raise last_error
         raise RuntimeError("No model candidates configured.")
+
+    async def embedding(
+        self,
+        *,
+        primary_model: str,
+        input_text: str,
+        include_fallbacks: bool = False,
+    ) -> tuple[str, list[float]]:
+        if not input_text.strip():
+            raise ValueError("Embedding input text must not be empty.")
+
+        models_to_try = (
+            [primary_model, *self.config.models.fallbacks]
+            if include_fallbacks
+            else [primary_model]
+        )
+        seen: set[str] = set()
+        ordered_models = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
+        last_error: Exception | None = None
+        for model in ordered_models:
+            try:
+                litellm_model = self._litellm_model_for_call(model)
+                call_kwargs = {
+                    "model": litellm_model,
+                    "input": input_text,
+                    **self._provider_kwargs(model),
+                }
+                raw = await aembedding(**self._clean(call_kwargs))
+                parsed = self._response_to_dict(raw)
+                vector = self._extract_embedding(parsed)
+                if model != primary_model:
+                    self.logger.warning(
+                        "Primary embedding model failed, fallback used: %s -> %s",
+                        primary_model,
+                        model,
+                    )
+                return model, vector
+            except Exception as exc:
+                last_error = exc
+                self.logger.warning(
+                    "Embedding call failed for model=%s error=%s",
+                    model,
+                    exc.__class__.__name__,
+                )
+                self.logger.debug("Embedding failure details: %s", str(exc))
+                continue
+
+        if last_error is not None:
+            raise last_error
+        raise RuntimeError("No embedding model candidates configured.")
+
+    @staticmethod
+    def _response_to_dict(chunk: Any) -> dict[str, Any]:
+        if isinstance(chunk, dict):
+            return chunk
+        if hasattr(chunk, "model_dump"):
+            return chunk.model_dump(exclude_none=True)  # type: ignore[no-any-return]
+        if hasattr(chunk, "dict"):
+            return chunk.dict()  # type: ignore[no-any-return]
+        return {}
+
+    @staticmethod
+    def _extract_embedding(response: dict[str, Any]) -> list[float]:
+        data = response.get("data")
+        if not isinstance(data, list) or not data:
+            raise ValueError("Embedding response missing data.")
+        first = data[0]
+        if not isinstance(first, dict):
+            raise ValueError("Embedding response has invalid item.")
+        vector = first.get("embedding")
+        if not isinstance(vector, list) or not vector:
+            raise ValueError("Embedding vector is missing.")
+        normalized: list[float] = []
+        for value in vector:
+            normalized.append(float(value))
+        return normalized

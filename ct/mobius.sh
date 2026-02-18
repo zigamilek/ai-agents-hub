@@ -163,7 +163,7 @@ function update_script() {
   msg_ok "CLI command available: mobius"
 
   msg_info "Refreshing runtime files"
-  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius
+  $STD mkdir -p "${CONFIG_DIR}" "${CONFIG_DIR}/system_prompts" /var/log/mobius /var/lib/mobius/state
   [[ -f "${CONFIG_DIR}/config.yaml" ]] || $STD cp "${APP_DIR}/config.yaml" "${CONFIG_DIR}/config.yaml"
   if [[ ! -f "${CONFIG_DIR}/mobius.env" ]]; then
     cat <<'EOF' > "${CONFIG_DIR}/mobius.env"
@@ -178,7 +178,7 @@ EOF
     [[ -f "${CONFIG_DIR}/system_prompts/${prompt_name}" ]] || $STD cp "${prompt_file}" "${CONFIG_DIR}/system_prompts/${prompt_name}"
   done
   $STD cp "${APP_DIR}/deploy/systemd/mobius.service" "/etc/systemd/system/${SERVICE_NAME}.service"
-  $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius
+  $STD chown -R "${SERVICE_USER}:${SERVICE_USER}" "${APP_DIR}" "${CONFIG_DIR}" /var/log/mobius /var/lib/mobius/state
   msg_ok "Runtime files refreshed"
 
   msg_info "Restarting ${SERVICE_NAME}"

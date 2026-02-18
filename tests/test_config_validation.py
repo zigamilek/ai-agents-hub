@@ -128,3 +128,47 @@ def test_state_schema_version_rejects_inverted_range() -> None:
     }
     with pytest.raises(ValidationError):
         AppConfig.model_validate(payload)
+
+
+def test_state_user_scope_rejects_empty_anonymous_user_key() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {
+        "user_scope": {"policy": "fallback_anonymous", "anonymous_user_key": "   "}
+    }
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_retrieval_limits_reject_zero() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"retrieval": {"recent_memory_cards_limit": 0}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_checkin_limits_reject_zero() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"checkin": {"max_wins": 0}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_decision_json_retries_reject_negative() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"decision": {"max_json_retries": -1}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_memory_semantic_merge_limits_reject_zero() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"memory": {"semantic_merge": {"candidate_limit": 0}}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)
+
+
+def test_state_decision_on_failure_rejects_invalid_value() -> None:
+    payload = deepcopy(_valid_config())
+    payload["state"] = {"decision": {"on_failure": "explode"}}
+    with pytest.raises(ValidationError):
+        AppConfig.model_validate(payload)

@@ -87,6 +87,47 @@ class StubPromptManager:
         return prompts.get(key, f"{key} prompt")
 
 
+class StubStatePipeline:
+    def __init__(
+        self,
+        *,
+        context_text: str = "",
+        footer_text: str = "",
+    ) -> None:
+        self.context_text = context_text
+        self.footer_text = footer_text
+        self.context_calls: list[dict[str, Any]] = []
+        self.process_calls: list[dict[str, Any]] = []
+
+    def context_for_prompt(self, *, user_key: str | None, routed_domain: str) -> str:
+        self.context_calls.append({"user_key": user_key, "routed_domain": routed_domain})
+        return self.context_text
+
+    async def process_turn(
+        self,
+        *,
+        request_user: str | None,
+        session_key: str | None,
+        routed_domain: str,
+        user_text: str,
+        assistant_text: str,
+        used_model: str | None,
+        request_payload: dict[str, Any],
+    ) -> str:
+        self.process_calls.append(
+            {
+                "request_user": request_user,
+                "session_key": session_key,
+                "routed_domain": routed_domain,
+                "user_text": user_text,
+                "assistant_text": assistant_text,
+                "used_model": used_model,
+                "request_payload": request_payload,
+            }
+        )
+        return self.footer_text
+
+
 def _config() -> AppConfig:
     return AppConfig.model_validate(
         {
@@ -351,3 +392,37 @@ def test_sticky_session_resets_when_request_is_first_user_prompt() -> None:
     assert specialist_router.latest_seen_current_domain is None
     assert specialist_router.latest_seen_recent_domains == []
     assert specialist_router.classify_calls == 2
+
+
+def test_state_context_and_footer_are_injected_when_pipeline_is_present() -> None:
+    cfg = _config()
+    llm_router = StubLLMRouter(answer_text="Core specialist answer.")
+    specialist_router = StubSpecialistRouter(domain="health")
+    state_pipeline = StubStatePipeline(
+        context_text="Active tracks:\n- Lose fat [health] status=active",
+        footer_text=(
+            "*State writes:*\n"
+            "- checkin: `state/users/alex/checkins/health-lose-fat.md` (applied)"
+        ),
+    )
+    orchestrator = Orchestrator(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+        state_pipeline=state_pipeline,  # type: ignore[arg-type]
+    )
+    request = _request(
+        [{"role": "user", "content": "Today I decided I'll finally lose fat."}],
+        user="alex",
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert "Core specialist answer." in content
+    assert "*State writes:*" in content
+    assert "state/users/alex/checkins/health-lose-fat.md" in content
+    system_prompt = str(llm_router.calls[0]["messages"][0]["content"])
+    assert "User state context (deterministic snapshot):" in system_prompt
+    assert "Active tracks:" in system_prompt
+    assert len(state_pipeline.context_calls) == 1
+    assert len(state_pipeline.process_calls) == 1

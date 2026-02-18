@@ -71,6 +71,44 @@ state:
   projection:
     mode: one_way
     output_directory: /var/lib/mobius/state
+  user_scope:
+    policy: by_user
+    anonymous_user_key: anonymous
+  decision:
+    enabled: true
+    model: ""
+    include_fallbacks: false
+    max_user_chars: 3000
+    max_assistant_chars: 3000
+    max_json_retries: 1
+    on_failure: footer_warning
+  checkin:
+    enabled: true
+    max_wins: 3
+    max_barriers: 3
+    max_next_actions: 3
+  journal:
+    enabled: true
+    include_assistant_excerpt: true
+    max_assistant_excerpt_chars: 320
+    max_domain_hints: 4
+  memory:
+    enabled: true
+    max_tags: 8
+    semantic_merge:
+      enabled: true
+      embedding_model: text-embedding-3-small
+      verification_model: ""
+      include_fallbacks: false
+      candidate_limit: 8
+      max_candidate_text_chars: 280
+      max_json_retries: 1
+      max_distance: 0.42
+  retrieval:
+    active_tracks_limit: 5
+    recent_checkins_limit: 5
+    recent_journal_entries_limit: 3
+    recent_memory_cards_limit: 5
 
 diagnostics:
   enabled: true

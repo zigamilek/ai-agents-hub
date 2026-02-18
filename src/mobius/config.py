@@ -213,10 +213,149 @@ class StateProjectionConfig(StrictConfigModel):
     output_directory: Path = Path("./data/state")
 
 
+class StateUserScopeConfig(StrictConfigModel):
+    policy: Literal["by_user", "fallback_anonymous"] = "by_user"
+    anonymous_user_key: str = "anonymous"
+
+    @field_validator("anonymous_user_key")
+    @classmethod
+    def _non_empty_anonymous_user_key(cls, value: str) -> str:
+        trimmed = value.strip()
+        if not trimmed:
+            raise ValueError("state.user_scope.anonymous_user_key must not be empty.")
+        return trimmed
+
+
+class StateDecisionConfig(StrictConfigModel):
+    enabled: bool = True
+    model: str = ""
+    include_fallbacks: bool = False
+    max_user_chars: int = 3000
+    max_assistant_chars: int = 3000
+    max_json_retries: int = 1
+    on_failure: Literal["silent", "footer_warning"] = "footer_warning"
+
+    @field_validator("max_user_chars", "max_assistant_chars")
+    @classmethod
+    def _positive_max_chars(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("State decision max char limits must be >= 1.")
+        return value
+
+    @field_validator("max_json_retries")
+    @classmethod
+    def _non_negative_json_retries(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("state.decision.max_json_retries must be >= 0.")
+        return value
+
+
+class StateCheckinConfig(StrictConfigModel):
+    enabled: bool = True
+    max_wins: int = 3
+    max_barriers: int = 3
+    max_next_actions: int = 3
+
+    @field_validator("max_wins", "max_barriers", "max_next_actions")
+    @classmethod
+    def _positive_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("state.checkin limits must be >= 1.")
+        return value
+
+
+class StateJournalConfig(StrictConfigModel):
+    enabled: bool = True
+    include_assistant_excerpt: bool = True
+    max_assistant_excerpt_chars: int = 320
+    max_domain_hints: int = 4
+
+    @field_validator("max_assistant_excerpt_chars", "max_domain_hints")
+    @classmethod
+    def _positive_journal_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("state.journal limits must be >= 1.")
+        return value
+
+
+class StateMemorySemanticMergeConfig(StrictConfigModel):
+    enabled: bool = True
+    embedding_model: str = "text-embedding-3-small"
+    verification_model: str = ""
+    include_fallbacks: bool = False
+    candidate_limit: int = 8
+    max_candidate_text_chars: int = 280
+    max_json_retries: int = 1
+    max_distance: float = 0.42
+
+    @field_validator("candidate_limit", "max_candidate_text_chars")
+    @classmethod
+    def _positive_semantic_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("state.memory.semantic_merge limits must be >= 1.")
+        return value
+
+    @field_validator("max_json_retries")
+    @classmethod
+    def _non_negative_semantic_json_retries(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError(
+                "state.memory.semantic_merge.max_json_retries must be >= 0."
+            )
+        return value
+
+    @field_validator("max_distance")
+    @classmethod
+    def _valid_max_distance(cls, value: float) -> float:
+        if value < 0.0:
+            raise ValueError("state.memory.semantic_merge.max_distance must be >= 0.")
+        return value
+
+
+class StateMemoryConfig(StrictConfigModel):
+    enabled: bool = True
+    max_tags: int = 8
+    semantic_merge: StateMemorySemanticMergeConfig = Field(
+        default_factory=StateMemorySemanticMergeConfig
+    )
+
+    @field_validator("max_tags")
+    @classmethod
+    def _positive_max_tags(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("state.memory.max_tags must be >= 1.")
+        return value
+
+
+class StateRetrievalConfig(StrictConfigModel):
+    active_tracks_limit: int = 5
+    recent_checkins_limit: int = 5
+    recent_journal_entries_limit: int = 3
+    recent_memory_cards_limit: int = 5
+
+    @field_validator(
+        "active_tracks_limit",
+        "recent_checkins_limit",
+        "recent_journal_entries_limit",
+        "recent_memory_cards_limit",
+    )
+    @classmethod
+    def _positive_retrieval_limits(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("state.retrieval limits must be >= 1.")
+        return value
+
+
 class StateConfig(StrictConfigModel):
     enabled: bool = False
     database: StateDatabaseConfig = Field(default_factory=StateDatabaseConfig)
     projection: StateProjectionConfig = Field(default_factory=StateProjectionConfig)
+    user_scope: StateUserScopeConfig = Field(default_factory=StateUserScopeConfig)
+    decision: StateDecisionConfig = Field(default_factory=StateDecisionConfig)
+    checkin: StateCheckinConfig = Field(default_factory=StateCheckinConfig)
+    journal: StateJournalConfig = Field(default_factory=StateJournalConfig)
+    memory: StateMemoryConfig = Field(default_factory=StateMemoryConfig)
+    retrieval: StateRetrievalConfig = Field(default_factory=StateRetrievalConfig)
 
     @model_validator(mode="after")
     def _validate_enabled_dsn(self) -> "StateConfig":
@@ -345,6 +484,53 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
         mode = os.getenv("MOBIUS_STATE_PROJECTION_MODE", "").strip().lower()
         if mode in {"one_way", "hybrid_bidirectional"}:
             config.state.projection.mode = mode  # type: ignore[assignment]
+    if os.getenv("MOBIUS_STATE_USER_SCOPE_POLICY"):
+        policy = os.getenv("MOBIUS_STATE_USER_SCOPE_POLICY", "").strip().lower()
+        if policy in {"by_user", "fallback_anonymous"}:
+            config.state.user_scope.policy = policy  # type: ignore[assignment]
+    if os.getenv("MOBIUS_STATE_ANONYMOUS_USER_KEY"):
+        config.state.user_scope.anonymous_user_key = os.getenv(
+            "MOBIUS_STATE_ANONYMOUS_USER_KEY",
+            config.state.user_scope.anonymous_user_key,
+        )
+    if os.getenv("MOBIUS_STATE_DECISION_MODEL"):
+        config.state.decision.model = os.getenv(
+            "MOBIUS_STATE_DECISION_MODEL",
+            config.state.decision.model,
+        )
+    if os.getenv("MOBIUS_STATE_DECISION_ENABLED"):
+        config.state.decision.enabled = (
+            os.getenv("MOBIUS_STATE_DECISION_ENABLED", "true").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+    if os.getenv("MOBIUS_STATE_DECISION_MAX_JSON_RETRIES"):
+        try:
+            config.state.decision.max_json_retries = int(
+                os.getenv("MOBIUS_STATE_DECISION_MAX_JSON_RETRIES", "1")
+            )
+        except Exception:
+            pass
+    if os.getenv("MOBIUS_STATE_DECISION_ON_FAILURE"):
+        mode = os.getenv("MOBIUS_STATE_DECISION_ON_FAILURE", "").strip().lower()
+        if mode in {"silent", "footer_warning"}:
+            config.state.decision.on_failure = mode  # type: ignore[assignment]
+    if os.getenv("MOBIUS_STATE_MEMORY_SEMANTIC_ENABLED"):
+        config.state.memory.semantic_merge.enabled = (
+            os.getenv("MOBIUS_STATE_MEMORY_SEMANTIC_ENABLED", "true")
+            .strip()
+            .lower()
+            in {"1", "true", "yes", "on"}
+        )
+    if os.getenv("MOBIUS_STATE_MEMORY_EMBEDDING_MODEL"):
+        config.state.memory.semantic_merge.embedding_model = os.getenv(
+            "MOBIUS_STATE_MEMORY_EMBEDDING_MODEL",
+            config.state.memory.semantic_merge.embedding_model,
+        )
+    if os.getenv("MOBIUS_STATE_MEMORY_VERIFY_MODEL"):
+        config.state.memory.semantic_merge.verification_model = os.getenv(
+            "MOBIUS_STATE_MEMORY_VERIFY_MODEL",
+            config.state.memory.semantic_merge.verification_model,
+        )
 
     # Re-validate after env overrides to enforce cross-field invariants.
     return AppConfig.model_validate(config.model_dump())

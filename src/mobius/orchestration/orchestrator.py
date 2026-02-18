@@ -17,6 +17,7 @@ from mobius.orchestration.specialists import SpecialistProfile, get_specialist
 from mobius.prompts.manager import PromptManager
 from mobius.providers.litellm_router import LiteLLMRouter
 from mobius.runtime_context import timestamp_context_line
+from mobius.state.pipeline import StatePipeline
 
 
 @dataclass
@@ -62,12 +63,14 @@ class Orchestrator:
         specialist_router: SpecialistRouter,
         prompt_manager: PromptManager,
         session_store: StickySessionStore | None = None,
+        state_pipeline: StatePipeline | None = None,
     ) -> None:
         self.config = config
         self.llm_router = llm_router
         self.specialist_router = specialist_router
         self.prompt_manager = prompt_manager
         self.session_store = session_store or StickySessionStore(history_size=3)
+        self.state_pipeline = state_pipeline
         self.logger = get_logger(__name__)
         self.public_model_id = self.config.api.public_model_id
         self.allow_provider_model_passthrough = (
@@ -203,7 +206,9 @@ class Orchestrator:
         )
         return decision
 
-    def _build_system_prompt(self, selected: list[SpecialistProfile]) -> str:
+    def _build_system_prompt(
+        self, selected: list[SpecialistProfile], state_context: str = ""
+    ) -> str:
         if not selected:
             prompt = self.prompt_manager.get("general")
         else:
@@ -212,6 +217,13 @@ class Orchestrator:
                 lines.append(f"- {specialist.label} ({specialist.domain}):")
                 lines.append(self.prompt_manager.get(specialist.domain))
             prompt = "\n".join(lines)
+
+        if state_context.strip():
+            prompt = (
+                f"{prompt}\n\n"
+                "User state context (deterministic snapshot):\n"
+                f"{state_context.strip()}"
+            )
 
         if not self.config.runtime.inject_current_timestamp:
             return prompt
@@ -271,9 +283,10 @@ class Orchestrator:
         self,
         request: ChatCompletionRequest,
         decision: RoutingDecision,
+        state_context: str = "",
     ) -> list[dict[str, Any]]:
         messages: list[dict[str, Any]] = []
-        system_prompt = self._build_system_prompt(decision.selected)
+        system_prompt = self._build_system_prompt(decision.selected, state_context)
         messages.append({"role": "system", "content": system_prompt})
         messages.extend(_message_to_dict(msg) for msg in request.messages)
         return messages
@@ -300,7 +313,17 @@ class Orchestrator:
         if session_key and self._is_first_user_prompt(request.messages):
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
-        messages = self._build_orchestrated_messages(request, decision)
+        state_context = ""
+        if self.state_pipeline is not None:
+            state_context = self.state_pipeline.context_for_prompt(
+                user_key=request.user,
+                routed_domain=decision.domain,
+            )
+        messages = self._build_orchestrated_messages(
+            request,
+            decision,
+            state_context=state_context,
+        )
 
         passthrough = request.model_dump(
             exclude={"messages", "model", "stream"},
@@ -316,6 +339,18 @@ class Orchestrator:
         response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
         augmented = self._answered_by_prefix(decision.domain, used_model) + assistant_text
+        if self.state_pipeline is not None:
+            footer = await self.state_pipeline.process_turn(
+                request_user=request.user,
+                session_key=session_key,
+                routed_domain=decision.domain,
+                user_text=user_text,
+                assistant_text=assistant_text,
+                used_model=used_model,
+                request_payload=request.model_dump(exclude_none=True),
+            )
+            if footer:
+                augmented = f"{augmented}\n\n{footer}"
         try:
             response["choices"][0]["message"]["content"] = augmented
         except Exception:
@@ -345,7 +380,17 @@ class Orchestrator:
         if session_key and self._is_first_user_prompt(request.messages):
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
-        messages = self._build_orchestrated_messages(request, decision)
+        state_context = ""
+        if self.state_pipeline is not None:
+            state_context = self.state_pipeline.context_for_prompt(
+                user_key=request.user,
+                routed_domain=decision.domain,
+            )
+        messages = self._build_orchestrated_messages(
+            request,
+            decision,
+            state_context=state_context,
+        )
         passthrough = request.model_dump(
             exclude={"messages", "model", "stream"},
             exclude_none=True,
@@ -363,10 +408,18 @@ class Orchestrator:
         chunk_count = 0
         prefix = self._answered_by_prefix(decision.domain, used_model)
         prefix_pending = bool(prefix)
+        collected_assistant_chunks: list[str] = []
         async for chunk in stream:
             as_dict = _chunk_to_dict(chunk)
             stream_id = stream_id or as_dict.get("id")
             chunk_count += 1
+            try:
+                raw_delta = as_dict["choices"][0].get("delta", {})
+                raw_piece = raw_delta.get("content")
+                if isinstance(raw_piece, str):
+                    collected_assistant_chunks.append(raw_piece)
+            except Exception:
+                pass
             if prefix_pending:
                 try:
                     delta = as_dict["choices"][0].setdefault("delta", {})
@@ -393,6 +446,33 @@ class Orchestrator:
                 prefix_pending = False
             as_dict["model"] = decision.response_model
             yield f"data: {json.dumps(as_dict)}\n\n".encode("utf-8")
+
+        assistant_text = "".join(collected_assistant_chunks).strip()
+        if self.state_pipeline is not None:
+            footer = await self.state_pipeline.process_turn(
+                request_user=request.user,
+                session_key=session_key,
+                routed_domain=decision.domain,
+                user_text=user_text,
+                assistant_text=assistant_text,
+                used_model=used_model,
+                request_payload=request.model_dump(exclude_none=True),
+            )
+            if footer:
+                footer_chunk = {
+                    "id": stream_id or f"chatcmpl-{uuid4().hex}",
+                    "object": "chat.completion.chunk",
+                    "created": int(datetime.now(timezone.utc).timestamp()),
+                    "model": decision.response_model,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": f"\n\n{footer}"},
+                            "finish_reason": None,
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(footer_chunk)}\n\n".encode("utf-8")
 
         yield b"data: [DONE]\n\n"
         self.logger.info(
