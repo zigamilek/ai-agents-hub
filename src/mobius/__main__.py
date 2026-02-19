@@ -49,11 +49,41 @@ def _resolve_env_path(env_file: str | None) -> Path:
     return default_env_path()
 
 
-def _try_load_config(path: Path) -> tuple[AppConfig | None, str | None]:
+def _env_values_from_file(path: Path) -> dict[str, str]:
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        match = ENV_LINE_RE.match(stripped)
+        if not match:
+            continue
+        key = match.group("key")
+        value = match.group("value")
+        if key:
+            values[key] = value
+    return values
+
+
+def _try_load_config(
+    path: Path, *, env_path: Path | None = None
+) -> tuple[AppConfig | None, str | None]:
+    injected_keys: list[str] = []
+    if env_path is not None:
+        for key, value in _env_values_from_file(env_path).items():
+            if key in os.environ:
+                continue
+            os.environ[key] = value
+            injected_keys.append(key)
     try:
         return load_config(path), None
     except Exception as exc:
         return None, f"{exc.__class__.__name__}: {exc}"
+    finally:
+        for key in injected_keys:
+            os.environ.pop(key, None)
 
 
 def _path_state(path: Path) -> str:
@@ -592,7 +622,7 @@ def _cmd_version() -> int:
 def _cmd_paths(args: argparse.Namespace) -> int:
     cfg_path = _resolve_config_path(getattr(args, "config_path", None))
     env_path = _resolve_env_path(getattr(args, "env_file", None))
-    config, error = _try_load_config(cfg_path)
+    config, error = _try_load_config(cfg_path, env_path=env_path)
     _print_runtime_paths(
         cfg_path=cfg_path,
         env_path=env_path,
@@ -604,7 +634,8 @@ def _cmd_paths(args: argparse.Namespace) -> int:
 
 def _cmd_diagnostics(args: argparse.Namespace) -> int:
     cfg_path = _resolve_config_path(getattr(args, "config_path", None))
-    config, error = _try_load_config(cfg_path)
+    env_path = _resolve_env_path(getattr(args, "env_file", None))
+    config, error = _try_load_config(cfg_path, env_path=env_path)
 
     host = config.server.host if config is not None else "0.0.0.0"
     port = config.server.port if config is not None else 8080
@@ -660,7 +691,8 @@ def _cmd_logs(args: argparse.Namespace) -> int:
 
     if use_file:
         cfg_path = _resolve_config_path(getattr(args, "config_path", None))
-        config, _ = _try_load_config(cfg_path)
+        env_path = _resolve_env_path(getattr(args, "env_file", None))
+        config, _ = _try_load_config(cfg_path, env_path=env_path)
         log_file = (
             config.logging.directory / config.logging.filename
             if config is not None
@@ -718,6 +750,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "diagnostics", help="Print diagnostics curl commands and detected IP"
     )
     diagnostics_parser.add_argument("--config", dest="config_path", default=None)
+    diagnostics_parser.add_argument("--env-file", dest="env_file", default=None)
 
     subparsers.add_parser("start", help="Start systemd service")
     subparsers.add_parser("stop", help="Stop systemd service")
@@ -738,6 +771,7 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     logs_parser.add_argument("--file", action="store_true", help="Read logs from file")
     logs_parser.add_argument("--config", dest="config_path", default=None)
+    logs_parser.add_argument("--env-file", dest="env_file", default=None)
 
     update_parser = subparsers.add_parser(
         "update", help="Update Mobius from inside LXC"
