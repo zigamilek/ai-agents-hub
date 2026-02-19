@@ -58,12 +58,15 @@ state:
     enabled: true
     model: ""                # empty => fallback to models.orchestrator
     include_fallbacks: false
+    facts_only: true         # persist only user-grounded facts
+    strict_grounding: true   # require exact user evidence for writes
     max_json_retries: 1      # auto-retry when output is invalid JSON/schema
     on_failure: footer_warning
   checkin:
     enabled: true
   journal:
     enabled: true
+    include_assistant_excerpt: false
   memory:
     enabled: true
     semantic_merge:
@@ -83,6 +86,14 @@ Phase 1 storage contract:
 - Failure visibility: if decision model fails, response footer can show state-warning
 
 Single prompt can trigger multiple writes (check-in + journal + memory) when justified.
+
+State write policy (facts-only):
+
+- `memory`: durable long-term facts/preferences/recurring patterns
+- `check-in`: ongoing goal/habit/system with progress/barrier/coaching signal
+- `journal`: factual daily life/event log
+- conservative default: when uncertain, do not write memory
+- strict grounding: write blocks must include an exact user-text evidence quote
 
 ### Specialist Routing Model
 
