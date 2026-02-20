@@ -262,3 +262,26 @@ def test_grounding_guard_filters_all_channels_when_ungrounded() -> None:
     assert guarded.checkin is None
     assert guarded.journal is None
     assert guarded.memory is None
+
+
+def test_format_detection_header_renders_channel_booleans_and_reasons() -> None:
+    decision = StateDecision(
+        checkin=None,
+        journal=JournalWrite(
+            entry_ts=datetime.now(timezone.utc),
+            title="Day log",
+            body_md="Today we visited the museum.",
+            domain_hints=["general"],
+            evidence="Today we visited the museum.",
+        ),
+        memory=None,
+        checkin_reason="no ongoing coaching signal",
+        journal_reason="daily factual event",
+        memory_reason="not durable preference",
+        reason="journal_only",
+    )
+    header = StatePipeline.format_detection_header(decision)
+    assert "*State detection:*" in header
+    assert "- check-in: false (no ongoing coaching signal)" in header
+    assert "- memory: false (not durable preference)" in header
+    assert "- journal: true (daily factual event)" in header

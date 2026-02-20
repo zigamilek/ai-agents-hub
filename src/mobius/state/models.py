@@ -40,6 +40,9 @@ class StateDecision:
     checkin: CheckinWrite | None = None
     journal: JournalWrite | None = None
     memory: MemoryWrite | None = None
+    checkin_reason: str = ""
+    journal_reason: str = ""
+    memory_reason: str = ""
     reason: str = ""
     source_model: str | None = None
     is_failure: bool = False

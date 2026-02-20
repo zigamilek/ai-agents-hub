@@ -315,11 +315,19 @@ class Orchestrator:
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
         state_context = ""
+        state_decision = None
+        state_detection_header = ""
         if self.state_pipeline is not None:
             state_context = self.state_pipeline.context_for_prompt(
                 user_key=request.user,
                 routed_domain=decision.domain,
             )
+            state_decision = await self.state_pipeline.preview_turn(
+                request_user=request.user,
+                routed_domain=decision.domain,
+                user_text=user_text,
+            )
+            state_detection_header = self.state_pipeline.format_detection_header(state_decision)
         messages = self._build_orchestrated_messages(
             request,
             decision,
@@ -339,7 +347,11 @@ class Orchestrator:
         response = _chunk_to_dict(raw_response)
         response["model"] = decision.response_model
         assistant_text = self._extract_assistant_text(response)
-        augmented = self._answered_by_prefix(decision.domain, used_model) + assistant_text
+        augmented = (
+            state_detection_header
+            + self._answered_by_prefix(decision.domain, used_model)
+            + assistant_text
+        )
         if self.state_pipeline is not None:
             footer = await self.state_pipeline.process_turn(
                 request_user=request.user,
@@ -349,6 +361,7 @@ class Orchestrator:
                 assistant_text=assistant_text,
                 used_model=used_model,
                 request_payload=request.model_dump(exclude_none=True),
+                precomputed_decision=state_decision,
             )
             if footer:
                 augmented = f"{augmented}\n\n{footer}"
@@ -382,11 +395,19 @@ class Orchestrator:
             self.session_store.reset(session_key)
         decision = await self._decide_routing(request.messages, request.model, session_key)
         state_context = ""
+        state_decision = None
+        state_detection_header = ""
         if self.state_pipeline is not None:
             state_context = self.state_pipeline.context_for_prompt(
                 user_key=request.user,
                 routed_domain=decision.domain,
             )
+            state_decision = await self.state_pipeline.preview_turn(
+                request_user=request.user,
+                routed_domain=decision.domain,
+                user_text=user_text,
+            )
+            state_detection_header = self.state_pipeline.format_detection_header(state_decision)
         messages = self._build_orchestrated_messages(
             request,
             decision,
@@ -407,7 +428,7 @@ class Orchestrator:
 
         stream_id: str | None = None
         chunk_count = 0
-        prefix = self._answered_by_prefix(decision.domain, used_model)
+        prefix = state_detection_header + self._answered_by_prefix(decision.domain, used_model)
         prefix_pending = bool(prefix)
         collected_assistant_chunks: list[str] = []
         async for chunk in stream:
@@ -458,6 +479,7 @@ class Orchestrator:
                 assistant_text=assistant_text,
                 used_model=used_model,
                 request_payload=request.model_dump(exclude_none=True),
+                precomputed_decision=state_decision,
             )
             if footer:
                 footer_chunk = {

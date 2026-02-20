@@ -83,6 +83,11 @@ def _payload_has_required_shape(payload: dict[str, Any]) -> bool:
         write_value = block.get("write")
         if not isinstance(write_value, bool):
             return False
+        block_reason = block.get("reason")
+        if not isinstance(block_reason, str):
+            return False
+        if not block_reason.strip():
+            return False
         if not write_value:
             continue
         if block_name == "checkin":
@@ -131,6 +136,10 @@ def _normalize_track_type(raw: str) -> str:
     return "goal"
 
 
+def _compact_reason(value: Any) -> str:
+    return " ".join(str(value or "").split()).strip()
+
+
 class StateDecisionEngine:
     def __init__(self, *, config: AppConfig, llm_router: LiteLLMRouter) -> None:
         self.config = config
@@ -152,7 +161,12 @@ class StateDecisionEngine:
     ) -> StateDecision:
         trimmed_user = user_text.strip()
         if not trimmed_user:
-            return StateDecision(reason="empty-user-text")
+            return StateDecision(
+                reason="empty-user-text",
+                checkin_reason="empty user text",
+                journal_reason="empty user text",
+                memory_reason="empty user text",
+            )
 
         llm_decision = await self._decide_with_model(
             user_text=trimmed_user,
@@ -163,8 +177,19 @@ class StateDecisionEngine:
         if llm_decision is not None:
             return llm_decision
         if not self.config.state.decision.enabled:
-            return StateDecision(reason="state-decision-disabled")
-        return StateDecision(reason="state-model-unavailable", is_failure=True)
+            return StateDecision(
+                reason="state-decision-disabled",
+                checkin_reason="state decision disabled",
+                journal_reason="state decision disabled",
+                memory_reason="state decision disabled",
+            )
+        return StateDecision(
+            reason="state-model-unavailable",
+            checkin_reason="state decision model unavailable",
+            journal_reason="state decision model unavailable",
+            memory_reason="state decision model unavailable",
+            is_failure=True,
+        )
 
     async def _decide_with_model(
         self,
@@ -276,20 +301,23 @@ class StateDecisionEngine:
             '    "barriers": string[],\n'
             '    "next_actions": string[],\n'
             '    "tags": string[],\n'
-            '    "evidence": string\n'
+            '    "evidence": string,\n'
+            '    "reason": string\n'
             "  },\n"
             '  "journal": {\n'
             '    "write": boolean,\n'
             '    "title": string,\n'
             '    "body_md": string,\n'
             '    "domain_hints": string[],\n'
-            '    "evidence": string\n'
+            '    "evidence": string,\n'
+            '    "reason": string\n'
             "  },\n"
             '  "memory": {\n'
             '    "write": boolean,\n'
             '    "domain": string,\n'
             '    "memory": string,\n'
-            '    "evidence": string\n'
+            '    "evidence": string,\n'
+            '    "reason": string\n'
             "  },\n"
             '  "reason": string\n'
             "}\n"
@@ -302,6 +330,7 @@ class StateDecisionEngine:
             "- Memory text must be self-contained and explicit; no vague pronouns.\n"
             "- If latest user text conflicts with an existing durable memory, produce updated memory text (do not add contradictory fact).\n"
             "- Ignore sarcasm/jokes/non-literal claims for memory unless user explicitly confirms literal intent.\n"
+            "- For EACH channel, include a short reason (<=12 words) for why write is true/false.\n"
             "Triage ladder:\n"
             "1) Memory: durable preferences, recurring patterns, long-term facts/commitments.\n"
             "2) Check-in: ongoing goal/habit/system plus progress/barrier/accountability/coaching signal.\n"
@@ -370,6 +399,11 @@ class StateDecisionEngine:
 
         checkin_block = payload.get("checkin")
         checkin_write: CheckinWrite | None = None
+        checkin_reason = (
+            _compact_reason(checkin_block.get("reason"))
+            if isinstance(checkin_block, dict)
+            else ""
+        )
         if self.config.state.checkin.enabled and isinstance(checkin_block, dict):
             if bool(checkin_block.get("write")):
                 checkin_domain = str(checkin_block.get("domain") or routed_domain).strip()
@@ -408,9 +442,18 @@ class StateDecisionEngine:
                     tags=_normalize_items(checkin_block.get("tags"), limit=max_tags),
                     evidence=evidence,
                 )
+        elif not self.config.state.checkin.enabled:
+            checkin_reason = "check-in channel disabled by config"
+        if not checkin_reason:
+            checkin_reason = "missing check-in reason from state decision model"
 
         journal_block = payload.get("journal")
         journal_write: JournalWrite | None = None
+        journal_reason = (
+            _compact_reason(journal_block.get("reason"))
+            if isinstance(journal_block, dict)
+            else ""
+        )
         if self.config.state.journal.enabled and isinstance(journal_block, dict):
             if bool(journal_block.get("write")):
                 title = str(journal_block.get("title") or "").strip()
@@ -430,9 +473,18 @@ class StateDecisionEngine:
                     ),
                     evidence=evidence,
                 )
+        elif not self.config.state.journal.enabled:
+            journal_reason = "journal channel disabled by config"
+        if not journal_reason:
+            journal_reason = "missing journal reason from state decision model"
 
         memory_block = payload.get("memory")
         memory_write: MemoryWrite | None = None
+        memory_reason = (
+            _compact_reason(memory_block.get("reason"))
+            if isinstance(memory_block, dict)
+            else ""
+        )
         if self.config.state.memory.enabled and isinstance(memory_block, dict):
             if bool(memory_block.get("write")):
                 memory_domain = str(memory_block.get("domain") or routed_domain).strip()
@@ -445,12 +497,19 @@ class StateDecisionEngine:
                     memory=memory_text,
                     evidence=evidence,
                 )
+        elif not self.config.state.memory.enabled:
+            memory_reason = "memory channel disabled by config"
+        if not memory_reason:
+            memory_reason = "missing memory reason from state decision model"
 
-        reason = str(payload.get("reason") or "").strip()
+        reason = _compact_reason(payload.get("reason"))
         return StateDecision(
             checkin=checkin_write,
             journal=journal_write,
             memory=memory_write,
+            checkin_reason=checkin_reason,
+            journal_reason=journal_reason,
+            memory_reason=memory_reason,
             reason=reason or "state-model",
             source_model=source_model,
         )

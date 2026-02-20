@@ -8,6 +8,7 @@ from mobius.api.schemas import ChatCompletionRequest
 from mobius.config import AppConfig
 from mobius.orchestration.orchestrator import Orchestrator
 from mobius.orchestration.specialist_router import SpecialistRoute
+from mobius.state.models import StateDecision
 
 
 class StubLLMRouter:
@@ -92,16 +93,41 @@ class StubStatePipeline:
         self,
         *,
         context_text: str = "",
+        detection_header_text: str = "",
         footer_text: str = "",
+        preview_decision: StateDecision | None = None,
     ) -> None:
         self.context_text = context_text
+        self.detection_header_text = detection_header_text
         self.footer_text = footer_text
+        self.preview_decision = preview_decision
         self.context_calls: list[dict[str, Any]] = []
+        self.preview_calls: list[dict[str, Any]] = []
         self.process_calls: list[dict[str, Any]] = []
 
     def context_for_prompt(self, *, user_key: str | None, routed_domain: str) -> str:
         self.context_calls.append({"user_key": user_key, "routed_domain": routed_domain})
         return self.context_text
+
+    async def preview_turn(
+        self,
+        *,
+        request_user: str | None,
+        routed_domain: str,
+        user_text: str,
+    ) -> StateDecision | None:
+        self.preview_calls.append(
+            {
+                "request_user": request_user,
+                "routed_domain": routed_domain,
+                "user_text": user_text,
+            }
+        )
+        return self.preview_decision
+
+    def format_detection_header(self, decision: StateDecision | None) -> str:
+        _ = decision
+        return self.detection_header_text
 
     async def process_turn(
         self,
@@ -113,6 +139,7 @@ class StubStatePipeline:
         assistant_text: str,
         used_model: str | None,
         request_payload: dict[str, Any],
+        precomputed_decision: StateDecision | None = None,
     ) -> str:
         self.process_calls.append(
             {
@@ -123,6 +150,7 @@ class StubStatePipeline:
                 "assistant_text": assistant_text,
                 "used_model": used_model,
                 "request_payload": request_payload,
+                "precomputed_decision": precomputed_decision,
             }
         )
         return self.footer_text
@@ -425,7 +453,50 @@ def test_state_context_and_footer_are_injected_when_pipeline_is_present() -> Non
     assert "User state context (deterministic snapshot):" in system_prompt
     assert "Active tracks:" in system_prompt
     assert len(state_pipeline.context_calls) == 1
+    assert len(state_pipeline.preview_calls) == 1
     assert len(state_pipeline.process_calls) == 1
+
+
+def test_state_detection_header_is_prepended_before_answered_by() -> None:
+    cfg = _config()
+    llm_router = StubLLMRouter(answer_text="Core specialist answer.")
+    specialist_router = StubSpecialistRouter(domain="health")
+    preview_decision = StateDecision(
+        checkin_reason="no ongoing coaching request in user message",
+        journal_reason="daily factual event in user message",
+        memory_reason="not a durable long-term fact",
+        reason="journal-only",
+    )
+    state_pipeline = StubStatePipeline(
+        context_text="",
+        detection_header_text=(
+            "*State detection:*\n"
+            "- check-in: false (no ongoing coaching request in user message)\n"
+            "- memory: false (not a durable long-term fact)\n"
+            "- journal: false (daily factual event in user message)\n\n"
+        ),
+        footer_text="",
+        preview_decision=preview_decision,
+    )
+    orchestrator = Orchestrator(
+        config=cfg,
+        llm_router=llm_router,  # type: ignore[arg-type]
+        specialist_router=specialist_router,  # type: ignore[arg-type]
+        prompt_manager=StubPromptManager(),  # type: ignore[arg-type]
+        state_pipeline=state_pipeline,  # type: ignore[arg-type]
+    )
+    request = _request(
+        [{"role": "user", "content": "Today we visited the technical museum."}],
+        user="alex",
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert content.startswith("*State detection:*")
+    assert "*Answered by The Healer (the health specialist) using gpt-4o-mini model.*" in content
+    assert content.index("*State detection:*") < content.index("*Answered by The Healer")
+    assert len(state_pipeline.preview_calls) == 1
+    assert len(state_pipeline.process_calls) == 1
+    assert state_pipeline.process_calls[0]["precomputed_decision"] is preview_decision
 
 
 def test_build_system_prompt_tolerates_none_state_context() -> None:

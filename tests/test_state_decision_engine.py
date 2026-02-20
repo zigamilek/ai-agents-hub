@@ -131,6 +131,7 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
             "next_actions": ["Prepare tomorrow meals in advance"],
             "tags": ["fat_loss"],
             "evidence": "Today I decided I'll finally lose fat.",
+            "reason": "explicit ongoing goal with accountability intent",
         },
         "journal": {
             "write": True,
@@ -138,12 +139,14 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
             "body_md": "Today I committed to a consistent fat-loss process.",
             "domain_hints": ["health"],
             "evidence": "Today I decided I'll finally lose fat.",
+            "reason": "daily event worth journaling",
         },
         "memory": {
             "write": True,
             "domain": "health",
             "memory": "I want to lose fat.",
             "evidence": "Today I decided I'll finally lose fat.",
+            "reason": "durable long-term commitment",
         },
         "reason": "explicit_goal_signal",
     }
@@ -163,6 +166,9 @@ def test_model_json_can_trigger_all_three_write_types() -> None:
     assert decision.journal is not None
     assert decision.memory is not None
     assert decision.reason == "explicit_goal_signal"
+    assert decision.checkin_reason == "explicit ongoing goal with accountability intent"
+    assert decision.journal_reason == "daily event worth journaling"
+    assert decision.memory_reason == "durable long-term commitment"
 
 
 def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
@@ -181,18 +187,21 @@ def test_invalid_json_is_retried_and_second_attempt_succeeds() -> None:
             "next_actions": [],
             "tags": [],
             "evidence": "fat-loss progress",
+            "reason": "ongoing progress update",
         },
         "journal": {
             "write": False,
             "title": "",
             "body_md": "",
             "domain_hints": [],
+            "reason": "not a day log",
         },
         "memory": {
             "write": False,
             "domain": "",
             "memory": "",
             "evidence": "",
+            "reason": "not durable",
         },
         "reason": "checkin_only",
     }
@@ -229,6 +238,7 @@ def _base_decision_payload() -> dict[str, Any]:
             "next_actions": [],
             "tags": [],
             "evidence": "",
+            "reason": "no ongoing coaching signal",
         },
         "journal": {
             "write": False,
@@ -236,12 +246,14 @@ def _base_decision_payload() -> dict[str, Any]:
             "body_md": "",
             "domain_hints": [],
             "evidence": "",
+            "reason": "no daily log signal",
         },
         "memory": {
             "write": False,
             "domain": "",
             "memory": "",
             "evidence": "",
+            "reason": "no durable memory signal",
         },
         "reason": "matrix",
     }
@@ -289,6 +301,7 @@ def test_positive_write_combination_matrix(
             "next_actions": [],
             "tags": [],
             "evidence": query,
+            "reason": "check-in signal present",
         }
     if "journal" in enabled_channels:
         payload["journal"] = {
@@ -297,6 +310,7 @@ def test_positive_write_combination_matrix(
             "body_md": query,
             "domain_hints": ["health"],
             "evidence": query,
+            "reason": "daily factual event",
         }
     if "memory" in enabled_channels:
         payload["memory"] = {
@@ -304,6 +318,7 @@ def test_positive_write_combination_matrix(
             "domain": "health",
             "memory": query,
             "evidence": query,
+            "reason": "durable preference or commitment",
         }
     engine = StateDecisionEngine(
         config=cfg,

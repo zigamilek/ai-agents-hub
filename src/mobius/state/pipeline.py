@@ -119,21 +119,89 @@ class StatePipeline:
         )
         return normalized.startswith(ambiguous_prefixes)
 
+    @staticmethod
+    def _clean_reason(value: str | None) -> str:
+        return " ".join(str(value or "").split()).strip()
+
+    @classmethod
+    def _decision_with_channel_reasons(cls, decision: StateDecision) -> StateDecision:
+        top_reason = cls._clean_reason(decision.reason) or "state-model"
+        failure_reason = top_reason if decision.is_failure else ""
+
+        checkin_reason = cls._clean_reason(decision.checkin_reason)
+        if not checkin_reason:
+            if failure_reason:
+                checkin_reason = f"not written ({failure_reason})"
+            else:
+                checkin_reason = "missing check-in reason from state decision model"
+
+        journal_reason = cls._clean_reason(decision.journal_reason)
+        if not journal_reason:
+            if failure_reason:
+                journal_reason = f"not written ({failure_reason})"
+            else:
+                journal_reason = "missing journal reason from state decision model"
+
+        memory_reason = cls._clean_reason(decision.memory_reason)
+        if not memory_reason:
+            if failure_reason:
+                memory_reason = f"not written ({failure_reason})"
+            else:
+                memory_reason = "missing memory reason from state decision model"
+
+        return StateDecision(
+            checkin=decision.checkin,
+            journal=decision.journal,
+            memory=decision.memory,
+            checkin_reason=checkin_reason,
+            journal_reason=journal_reason,
+            memory_reason=memory_reason,
+            reason=top_reason,
+            source_model=decision.source_model,
+            is_failure=decision.is_failure,
+        )
+
+    @classmethod
+    def format_detection_header(cls, decision: StateDecision | None) -> str:
+        if decision is None:
+            return ""
+        normalized = cls._decision_with_channel_reasons(decision)
+        lines = [
+            "*State detection:*",
+            (
+                f"- check-in: {'true' if normalized.checkin is not None else 'false'} "
+                f"({normalized.checkin_reason})"
+            ),
+            (
+                f"- memory: {'true' if normalized.memory is not None else 'false'} "
+                f"({normalized.memory_reason})"
+            ),
+            (
+                f"- journal: {'true' if normalized.journal is not None else 'false'} "
+                f"({normalized.journal_reason})"
+            ),
+        ]
+        return "\n".join(lines) + "\n\n"
+
     def _apply_grounding_guards(self, *, decision: StateDecision, user_text: str) -> StateDecision:
         strict_grounding = bool(self.config.state.decision.strict_grounding)
         facts_only = bool(self.config.state.decision.facts_only)
         if not strict_grounding and not facts_only:
-            return decision
+            return self._decision_with_channel_reasons(decision)
 
         reason_parts: list[str] = []
         checkin = decision.checkin
         journal = decision.journal
         memory = decision.memory
+        checkin_reason = self._clean_reason(decision.checkin_reason)
+        journal_reason = self._clean_reason(decision.journal_reason)
+        memory_reason = self._clean_reason(decision.memory_reason)
 
         if checkin is not None:
             evidence = checkin.evidence.strip()
             if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
                 checkin = None
+                checkin_reason = "filtered out: evidence not found in user text"
                 reason_parts.append("check-in-filtered-missing-evidence")
             elif facts_only:
                 checkin = CheckinWrite(
@@ -166,6 +234,7 @@ class StatePipeline:
             evidence = journal.evidence.strip()
             if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
                 journal = None
+                journal_reason = "filtered out: evidence not found in user text"
                 reason_parts.append("journal-filtered-missing-evidence")
             elif facts_only:
                 journal = JournalWrite(
@@ -180,11 +249,13 @@ class StatePipeline:
             evidence = memory.evidence.strip()
             if strict_grounding and not self._contains_evidence(user_text=user_text, evidence=evidence):
                 memory = None
+                memory_reason = "filtered out: evidence not found in user text"
                 reason_parts.append("memory-filtered-missing-evidence")
             else:
                 memory_text = evidence or memory.memory
                 if self._looks_ambiguous_memory(memory_text):
                     memory = None
+                    memory_reason = "filtered out: ambiguous memory text"
                     reason_parts.append("memory-filtered-ambiguous")
                 elif facts_only:
                     memory = MemoryWrite(
@@ -197,14 +268,72 @@ class StatePipeline:
         if reason_parts:
             suffix = ",".join(reason_parts)
             reason = f"{reason}|{suffix}" if reason else suffix
-        return StateDecision(
-            checkin=checkin,
-            journal=journal,
-            memory=memory,
-            reason=reason,
-            source_model=decision.source_model,
-            is_failure=decision.is_failure,
+        return self._decision_with_channel_reasons(
+            StateDecision(
+                checkin=checkin,
+                journal=journal,
+                memory=memory,
+                checkin_reason=checkin_reason,
+                journal_reason=journal_reason,
+                memory_reason=memory_reason,
+                reason=reason,
+                source_model=decision.source_model,
+                is_failure=decision.is_failure,
+            )
         )
+
+    async def _decide_turn(
+        self,
+        *,
+        normalized_user_key: str,
+        routed_domain: str,
+        user_text: str,
+        assistant_text: str,
+    ) -> StateDecision:
+        snapshot = self.storage.fetch_context_snapshot(
+            user_key=normalized_user_key,
+            routed_domain=routed_domain,
+        )
+        decision = await self.decision_engine.decide(
+            user_text=user_text,
+            assistant_text=assistant_text,
+            routed_domain=routed_domain,
+            context=snapshot,
+        )
+        return self._apply_grounding_guards(decision=decision, user_text=user_text)
+
+    async def preview_turn(
+        self,
+        *,
+        request_user: str | None,
+        routed_domain: str,
+        user_text: str,
+    ) -> StateDecision | None:
+        if not self.enabled:
+            return None
+        normalized_user_key = self.resolve_user_key(request_user, self.config)
+        try:
+            return await self._decide_turn(
+                normalized_user_key=normalized_user_key,
+                routed_domain=routed_domain,
+                user_text=user_text,
+                assistant_text="",
+            )
+        except Exception as exc:
+            self.logger.warning(
+                "State preview failed domain=%s error=%s",
+                routed_domain,
+                exc.__class__.__name__,
+            )
+            return self._decision_with_channel_reasons(
+                StateDecision(
+                    reason=f"state-preview-failed:{exc.__class__.__name__}",
+                    checkin_reason=f"state preview failed ({exc.__class__.__name__})",
+                    journal_reason=f"state preview failed ({exc.__class__.__name__})",
+                    memory_reason=f"state preview failed ({exc.__class__.__name__})",
+                    is_failure=True,
+                )
+            )
 
     async def process_turn(
         self,
@@ -216,6 +345,7 @@ class StatePipeline:
         assistant_text: str,
         used_model: str | None,
         request_payload: dict[str, Any],
+        precomputed_decision: StateDecision | None = None,
     ) -> str:
         if not self.enabled:
             return ""
@@ -223,17 +353,15 @@ class StatePipeline:
         normalized_user_key = self.resolve_user_key(request_user, self.config)
         request_hash = _request_hash(request_payload)
         try:
-            snapshot = self.storage.fetch_context_snapshot(
-                user_key=normalized_user_key,
-                routed_domain=routed_domain,
-            )
-            decision = await self.decision_engine.decide(
-                user_text=user_text,
-                assistant_text=assistant_text,
-                routed_domain=routed_domain,
-                context=snapshot,
-            )
-            decision = self._apply_grounding_guards(decision=decision, user_text=user_text)
+            decision = precomputed_decision
+            if decision is None:
+                decision = await self._decide_turn(
+                    normalized_user_key=normalized_user_key,
+                    routed_domain=routed_domain,
+                    user_text=user_text,
+                    assistant_text=assistant_text,
+                )
+            decision = self._decision_with_channel_reasons(decision)
             if not decision.has_writes():
                 return self._decision_failure_footer(
                     decision=decision,
