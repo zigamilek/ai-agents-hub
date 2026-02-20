@@ -10,6 +10,7 @@ from mobius.api.schemas import ChatCompletionRequest, ModelCard, ModelListRespon
 from mobius.logging_setup import get_logger
 
 logger = get_logger(__name__)
+FORWARDED_USER_ID_HEADER = "X-OpenWebUI-User-Id"
 
 
 def _require_api_key(request: Request) -> None:
@@ -25,6 +26,24 @@ def _require_api_key(request: Request) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
         )
+
+
+def _payload_user_with_header_fallback(
+    payload: ChatCompletionRequest, request: Request
+) -> ChatCompletionRequest:
+    payload_user = str(payload.user or "").strip()
+    if payload_user:
+        return payload
+
+    forwarded_user = str(request.headers.get(FORWARDED_USER_ID_HEADER, "") or "").strip()
+    if not forwarded_user:
+        return payload
+
+    logger.debug(
+        "Using forwarded user id header '%s' for request user.",
+        FORWARDED_USER_ID_HEADER,
+    )
+    return payload.model_copy(update={"user": forwarded_user})
 
 
 def create_openai_router() -> APIRouter:
@@ -47,20 +66,21 @@ def create_openai_router() -> APIRouter:
         request: Request,
         _: None = Depends(_require_api_key),
     ) -> Any:
+        resolved_payload = _payload_user_with_header_fallback(payload, request)
         orchestrator = request.app.state.services["orchestrator"]
         app_config = request.app.state.services["config"]
         logger.info(
             "chat.completions request stream=%s requested_model=%s messages=%d",
-            payload.stream,
-            payload.model,
-            len(payload.messages),
+            resolved_payload.stream,
+            resolved_payload.model,
+            len(resolved_payload.messages),
         )
         if app_config.logging.include_payloads:
-            logger.debug("chat.completions payload: %s", payload.model_dump())
-        if payload.stream:
-            stream = orchestrator.stream_sse(payload)
+            logger.debug("chat.completions payload: %s", resolved_payload.model_dump())
+        if resolved_payload.stream:
+            stream = orchestrator.stream_sse(resolved_payload)
             return StreamingResponse(stream, media_type="text/event-stream")
-        response = await orchestrator.complete_non_stream(payload)
+        response = await orchestrator.complete_non_stream(resolved_payload)
         logger.info("chat.completions completed (non-stream).")
         return JSONResponse(response)
 
