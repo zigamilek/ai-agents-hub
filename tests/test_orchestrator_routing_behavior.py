@@ -499,6 +499,45 @@ def test_state_detection_header_is_prepended_before_answered_by() -> None:
     assert state_pipeline.process_calls[0]["precomputed_decision"] is preview_decision
 
 
+def test_orchestrator_strips_mobius_metadata_from_assistant_history() -> None:
+    orchestrator, llm_router, _specialist_router = _build_orchestrator(
+        domain="general",
+        answer_text="Follow-up answer.",
+    )
+    request = _request(
+        [
+            {"role": "user", "content": "Danes sem posadil 4 maline."},
+            {
+                "role": "assistant",
+                "content": (
+                    "*State detection:*\n"
+                    "- check-in: false (No check-in requested.)\n"
+                    "- memory: false (Not a durable memory.)\n"
+                    "- journal: true (One-off daily log.)\n\n"
+                    "*Answered by The Mentor (the general specialist) using gpt-5.2 model.*\n\n"
+                    "Lepo - danes si posadil 4 maline.\n\n"
+                    "*State writes:*\n"
+                    "- journal: `state/users/Ziga-Milek/journal/2026-02-20.md` (append)"
+                ),
+            },
+            {"role": "user", "content": "Kaj predlagas naprej?"},
+        ],
+    )
+    response = asyncio.run(orchestrator.complete_non_stream(request))
+    content = str(response["choices"][0]["message"]["content"] or "")
+    assert "Follow-up answer." in content
+
+    sent_messages = llm_router.calls[0]["messages"]
+    assistant_history = next(
+        msg for msg in sent_messages if msg.get("role") == "assistant"
+    )["content"]
+    assert isinstance(assistant_history, str)
+    assert "State detection" not in assistant_history
+    assert "Answered by" not in assistant_history
+    assert "State writes" not in assistant_history
+    assert "Lepo - danes si posadil 4 maline." in assistant_history
+
+
 def test_build_system_prompt_tolerates_none_state_context() -> None:
     orchestrator, _llm_router, _specialist_router = _build_orchestrator(
         domain="general",

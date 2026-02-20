@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from time import perf_counter
@@ -40,8 +41,77 @@ SESSION_ID_FIELDS: tuple[str, ...] = (
 )
 
 
+def _normalize_md_line(line: str) -> str:
+    return line.strip().strip("*_ ").strip().lower()
+
+
+def _is_state_block_header(line: str) -> bool:
+    normalized = _normalize_md_line(line)
+    return normalized in {"state detection:", "state writes:", "state warning:"}
+
+
+def _is_answered_by_header(line: str) -> bool:
+    normalized = _normalize_md_line(line)
+    return normalized.startswith("answered by ")
+
+
+def _sanitize_assistant_text(text: str) -> str:
+    if not text.strip():
+        return text
+    lines = text.splitlines()
+    cleaned: list[str] = []
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        if _is_state_block_header(line):
+            idx += 1
+            while idx < len(lines):
+                stripped = lines[idx].strip()
+                if not stripped:
+                    idx += 1
+                    continue
+                if stripped.startswith("- "):
+                    idx += 1
+                    continue
+                break
+            while idx < len(lines) and not lines[idx].strip():
+                idx += 1
+            continue
+        if _is_answered_by_header(line):
+            idx += 1
+            while idx < len(lines) and not lines[idx].strip():
+                idx += 1
+            continue
+        cleaned.append(line)
+        idx += 1
+    rendered = "\n".join(cleaned).strip()
+    if not rendered:
+        return ""
+    return re.sub(r"\n{3,}", "\n\n", rendered)
+
+
 def _message_to_dict(message: OpenAIMessage) -> dict[str, Any]:
-    return message.model_dump(exclude_none=True)
+    payload = message.model_dump(exclude_none=True)
+    if payload.get("role") != "assistant":
+        return payload
+
+    content = payload.get("content")
+    if isinstance(content, str):
+        payload["content"] = _sanitize_assistant_text(content)
+        return payload
+
+    if isinstance(content, list):
+        sanitized_parts: list[dict[str, Any]] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            item_type = str(item.get("type") or "")
+            part = dict(item)
+            if item_type in {"text", "input_text"} and isinstance(item.get("text"), str):
+                part["text"] = _sanitize_assistant_text(item["text"])
+            sanitized_parts.append(part)
+        payload["content"] = sanitized_parts
+    return payload
 
 
 def _chunk_to_dict(chunk: Any) -> dict[str, Any]:
@@ -289,7 +359,13 @@ class Orchestrator:
         messages: list[dict[str, Any]] = []
         system_prompt = self._build_system_prompt(decision.selected, state_context)
         messages.append({"role": "system", "content": system_prompt})
-        messages.extend(_message_to_dict(msg) for msg in request.messages)
+        for message in request.messages:
+            serialized = _message_to_dict(message)
+            role = str(serialized.get("role") or "")
+            content = serialized.get("content")
+            if role == "assistant" and isinstance(content, str) and not content.strip():
+                continue
+            messages.append(serialized)
         return messages
 
     @staticmethod
